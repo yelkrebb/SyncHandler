@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectTypeGuids>{786C830F-07A1-408B-BD7F-6EE04809D6DB};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <ProjectGuid>{449A1A08-784E-4AAF-985B-2D784E62FC2F}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>Motion.Core.SyncHandler</RootNamespace>
+    <AssemblyName>Motion.Core.SyncHandler</AssemblyName>
+    <TargetFrameworkProfile>Profile78</TargetFrameworkProfile>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug</OutputPath>
+    <DefineConstants>DEBUG;</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <ConsolePause>false</ConsolePause>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>full</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release</OutputPath>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <ConsolePause>false</ConsolePause>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Utils\Constants.cs" />
+    <Compile Include="Handler\SyncHandler.cs" />
+    <Compile Include="Handler\Device\ISyncDeviceHandler.cs" />
+    <Compile Include="Handler\Device\SyncDeviceHandler932.cs" />
+    <Compile Include="Handler\Device\SyncDeviceHandler936.cs" />
+    <Compile Include="Handler\Device\SyncDeviceHandler939.cs" />
+    <Compile Include="Handler\Device\SyncDeviceHandler961.cs" />
+    <Compile Include="Handler\Device\SyncDeviceHandler965.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Plugin.Connectivity">
+      <HintPath>..\packages\Xam.Plugin.Connectivity.2.2.2\lib\portable-net45+wp80+wp81+wpa81+win8+MonoAndroid10+MonoTouch10+Xamarin.iOS10+Xamarin.Mac20+UAP10\Plugin.Connectivity.dll</HintPath>
+    </Reference>
+    <Reference Include="Plugin.Connectivity.Abstractions">
+      <HintPath>..\packages\Xam.Plugin.Connectivity.2.2.2\lib\portable-net45+wp80+wp81+wpa81+win8+MonoAndroid10+MonoTouch10+Xamarin.iOS10+Xamarin.Mac20+UAP10\Plugin.Connectivity.Abstractions.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Handler\" />
+    <Folder Include="Handler\Device\" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Motion.Core.Data\Motion.Core.Data.csproj">
+      <Project>{87DF2A80-E7CB-4009-B8C5-7289F477DAC7}</Project>
+      <Name>Motion.Core.Data</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Motion.Core.WSHandler\Motion.Core.WSHandler.csproj">
+      <Project>{A7A50F8B-A665-4E9F-870C-869F846F08EF}</Project>
+      <Name>Motion.Core.WSHandler</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Motion.Mobile.Core.BLE\Motion.Mobile.Core.BLE.csproj">
+      <Project>{238F0080-DABB-4EDE-9548-F7032B6E6B92}</Project>
+      <Name>Motion.Mobile.Core.BLE</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Portable\$(TargetFrameworkVersion)\Microsoft.Portable.CSharp.targets" />
+</Project>
