@@ -1,0 +1,7 @@
+/Development/XamarinApps/XamTest/Motion.Core.SyncHandler/obj/Debug/.NETPortable,Version=v4.5,Profile=Profile78.AssemblyAttribute.cs
+/Development/XamarinApps/XamTest/Motion.Core.SyncHandler/bin/Debug/Motion.Core.SyncHandler.dll.mdb
+/Development/XamarinApps/XamTest/Motion.Core.SyncHandler/bin/Debug/Motion.Core.SyncHandler.dll
+/Development/XamarinApps/XamTest/Motion.Core.SyncHandler/obj/Debug/Motion.Core.SyncHandler.dll
+/Development/XamarinApps/XamTest/Motion.Core.SyncHandler/obj/Debug/Motion.Core.SyncHandler.dll.mdb
+/Development/XamarinApps/XamTest/Motion.Core.SyncHandler/bin/Debug/Plugin.Connectivity.dll
+/Development/XamarinApps/XamTest/Motion.Core.SyncHandler/bin/Debug/Plugin.Connectivity.Abstractions.dll
