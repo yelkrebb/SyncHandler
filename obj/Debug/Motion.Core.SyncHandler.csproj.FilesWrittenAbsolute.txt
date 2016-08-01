@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /FILES/XamTest/Motion.Core.SyncHandler/obj/Debug/.NETPortable,Version=v4.5,Profile=Profile78.AssemblyAttribute.cs
 /FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/Motion.Core.SyncHandler.dll.mdb
 /FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/Motion.Core.SyncHandler.dll
@@ -5,3 +6,12 @@
 /FILES/XamTest/Motion.Core.SyncHandler/obj/Debug/Motion.Core.SyncHandler.dll.mdb
 /FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/Plugin.Connectivity.dll
 /FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/Plugin.Connectivity.Abstractions.dll
+=======
+/Development/XamarinApps/XamTest/Motion.Core.SyncHandler/obj/Debug/.NETPortable,Version=v4.5,Profile=Profile78.AssemblyAttribute.cs
+/Development/XamarinApps/XamTest/Motion.Core.SyncHandler/bin/Debug/Motion.Core.SyncHandler.dll.mdb
+/Development/XamarinApps/XamTest/Motion.Core.SyncHandler/bin/Debug/Motion.Core.SyncHandler.dll
+/Development/XamarinApps/XamTest/Motion.Core.SyncHandler/obj/Debug/Motion.Core.SyncHandler.dll
+/Development/XamarinApps/XamTest/Motion.Core.SyncHandler/obj/Debug/Motion.Core.SyncHandler.dll.mdb
+/Development/XamarinApps/XamTest/Motion.Core.SyncHandler/bin/Debug/Plugin.Connectivity.dll
+/Development/XamarinApps/XamTest/Motion.Core.SyncHandler/bin/Debug/Plugin.Connectivity.Abstractions.dll
+>>>>>>> 3b0d2c4f602c5d6b2e8fa6bf3bc7e195e2db651c
