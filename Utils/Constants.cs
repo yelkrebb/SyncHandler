@@ -23,6 +23,45 @@ namespace Motion.Core.SyncHandler
 			}
 		}
 
+		//BLE Services
+		public enum ServicesUUID
+		{
+			_FF01, //Trio Custom Service
+			_180A, //Device Information
+			_180F, //Battery Level
+			_1530 //DFU Service
+		}
+
+		//BLE Characteristics
+		public enum CharacteristicsUUID
+		{
+			//[Trio Custom Service]
+			_FF07, //FF07 Read,Indicate/Notify
+			_FF08, //FF08 Read, Indicate/Notify
+
+			//[Device Information]
+			_2A29, //Manufacturer
+			_2A24, //Model
+			_2A25, //Serial
+			_2A26, //Firmware Version
+
+			//[Battery Service]
+			_2A19, //Battery Level
+		}
+
+		//SyncHandler Sequence Names
+		public enum SyncHandlerSequence
+		{
+			EnableFF07,
+			EnableFF08,
+			ReadSerial,
+			ReadModel,
+			ReadFwVersion,
+			ReadBatteryLevel,
+			ReadManufacturer,
+			GetWsDeviceInfo
+		}
+
 		//Streamlines DB Web Services Method Names
 		public enum StreamlinesWebServiceMethod
 		{

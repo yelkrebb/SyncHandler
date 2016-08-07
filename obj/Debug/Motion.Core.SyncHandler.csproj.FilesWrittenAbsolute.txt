@@ -15,3 +15,16 @@
 /Development/XamarinApps/XamTest/Motion.Core.SyncHandler/bin/Debug/Plugin.Connectivity.dll
 /Development/XamarinApps/XamTest/Motion.Core.SyncHandler/bin/Debug/Plugin.Connectivity.Abstractions.dll
 >>>>>>> 3b0d2c4f602c5d6b2e8fa6bf3bc7e195e2db651c
+/FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/Motion.Mobile.CoreBLE.dll
+/FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/Motion.Mobile.CoreBLE.dll.mdb
+/FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/Motion.Core.WSHandler.dll
+/FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/Motion.Core.WSHandler.dll.mdb
+/FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/Motion.Core.Data.dll
+/FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/Motion.Core.Data.dll.mdb
+/FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/Motion.Mobile.Utilities.dll
+/FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/Motion.Mobile.Utilities.dll.mdb
+/FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/Newtonsoft.Json.dll
+/FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/System.Net.Http.dll
+/FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/System.Net.Http.Primitives.dll
+/FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/PCLStorage.Abstractions.dll
+/FILES/XamTest/Motion.Core.SyncHandler/bin/Debug/PCLStorage.dll
