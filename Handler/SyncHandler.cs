@@ -32,7 +32,10 @@ namespace Motion.Core.SyncHandler
 			this.InScanningMode = false;
 			serviceList = new List<Guid>();
 			serviceList.Add(0x180F.UuidFromPartial ());
+<<<<<<< HEAD
 			this.syncDeviceHandler = null;
+=======
+>>>>>>> 74ff625341a48fc0c980b4a1f11023c0845b13c4
 		}
 
 		public void setAdapter(IAdapter adapter)
@@ -94,7 +97,10 @@ namespace Motion.Core.SyncHandler
 		public void Disconnect()
 		{
 			Debug.WriteLine("SyncHandler: Device Disconnected");
+<<<<<<< HEAD
 			this.Adapter.StartScanningForDevices();
+=======
+>>>>>>> 74ff625341a48fc0c980b4a1f11023c0845b13c4
 		}
 
 		//**********EVENTS RECEIVED FROM BLE - Start
@@ -129,6 +135,7 @@ namespace Motion.Core.SyncHandler
 		void Adapter_DeviceConnected(object sender, DeviceConnectionEventArgs e)
 		{
 			Debug.WriteLine("Device Connected");
+<<<<<<< HEAD
 
 			this.Device = e.Device;
 
@@ -146,13 +153,19 @@ namespace Motion.Core.SyncHandler
 			this.syncDeviceHandler.SetAdapter(this.Adapter);
 			this.syncDeviceHandler.SetDevice(this.Device);
 
+=======
+			this.Device = e.Device;
+>>>>>>> 74ff625341a48fc0c980b4a1f11023c0845b13c4
 			e.Device.ServicesDiscovered += Services_Discovered;
 			e.Device.DiscoverServices();
 		}
 
 		void Adapter_DeviceDisconnected(object sender, DeviceConnectionEventArgs e)
 		{
+<<<<<<< HEAD
 			e.Device.ServicesDiscovered -= Services_Discovered;
+=======
+>>>>>>> 74ff625341a48fc0c980b4a1f11023c0845b13c4
 		}
 
 		void Adapter_DeviceFailedToConnect(object sender, DeviceConnectionEventArgs e)
@@ -163,14 +176,18 @@ namespace Motion.Core.SyncHandler
 		{
 		}
 
+<<<<<<< HEAD
 		void Characteristics_Discovered(object sender, EventArgs e)
 		{
 		}
 
+=======
+>>>>>>> 74ff625341a48fc0c980b4a1f11023c0845b13c4
 		void Services_Discovered(object sender, EventArgs e)
 		{
 			Debug.WriteLine("SyncHandler: Services Discovered");
 
+<<<<<<< HEAD
 			int serviceCount = 0;
 			IService lastService = null;
 			bool hasChar = false;
@@ -215,12 +232,17 @@ namespace Motion.Core.SyncHandler
 					this.startSyncProcess();
 				}
 			}
+=======
+			this.DeviceConnected(this, new EventArgs());
+			this.startSyncProcess();	
+>>>>>>> 74ff625341a48fc0c980b4a1f11023c0845b13c4
 		}
 
 		//**********EVENTS RECEIVED FROM BLE - End
 
 		private void startSyncProcess()
 		{
+<<<<<<< HEAD
 			this.syncDeviceHandler.StartSync();
 		}
 
@@ -246,6 +268,20 @@ namespace Motion.Core.SyncHandler
 			}
 
 			return svc;
+=======
+			if (this.Device.Name.Replace("PE", "").Replace("FT", "").StartsWith("932"))
+			{
+				this.syncDeviceHandler = SyncDeviceHandler932.GetInstance();
+			}
+			else if (this.Device.Name.Replace("PE", "").Replace("FT", "").StartsWith("961"))
+			{
+				this.syncDeviceHandler = SyncDeviceHandler961.GetInstance();
+			}
+
+			this.syncDeviceHandler.SetAdapter(this.Adapter);
+			this.syncDeviceHandler.SetDevice(this.Device);
+			this.syncDeviceHandler.StartSync();
+>>>>>>> 74ff625341a48fc0c980b4a1f11023c0845b13c4
 		}
 
 	}
