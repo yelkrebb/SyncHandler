@@ -11,11 +11,6 @@ namespace Motion.Core.SyncHandler
 
 		void StartSync();
 
-<<<<<<< HEAD
-=======
-		void GetValueFromChar(object sender, CharacteristicReadEventArgs e);
-
->>>>>>> 74ff625341a48fc0c980b4a1f11023c0845b13c4
 		ICharacteristic GetServicesCharacterisitic(Constants.CharacteristicsUUID uuid);
 
 		void ProcessCommands();
