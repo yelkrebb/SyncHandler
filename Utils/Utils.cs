@@ -21,6 +21,45 @@ namespace Motion.Core.SyncHandler
 			return result;
 		}
 
+		public static String ByteArrayToHexString(byte[] data)
+		{
+			string hex = BitConverter.ToString(data);
+			return hex.Replace("-", "");
+		}
+
+		public static bool TerminatorFound(byte terminatorChar, int terminatorLength, byte[] data)
+		{
+			bool found = false;
+			int count = 0;
+
+			foreach(byte b in data) {
+				if (b == terminatorChar)
+				{
+					count++;
+				}
+				if (count >= terminatorLength)
+				{
+					found = true;
+					break;
+				}
+
+			}
+
+			return found;
+		}
+
+		public static bool LastPacketReceived(int packetIndex,byte[] data)
+		{
+			bool lastPacket = false;
+
+			if (data[packetIndex] == 00)
+			{
+				lastPacket = true;
+			}
+
+			return lastPacket;
+		}
+
 	}
 }
 

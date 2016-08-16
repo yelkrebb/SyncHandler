@@ -21,7 +21,7 @@ namespace Motion.Core.SyncHandler
 
 		private IAdapter Adapter;
 		private IDevice Device;
-		private ISyncDeviceHandler syncDeviceHandler;
+		private ISyncDeviceHandler SyncDeviceHandler;
 
 		private List<Guid> serviceList;
 		private bool InScanningMode;
@@ -32,7 +32,7 @@ namespace Motion.Core.SyncHandler
 			this.InScanningMode = false;
 			serviceList = new List<Guid>();
 			serviceList.Add(0x180F.UuidFromPartial ());
-			this.syncDeviceHandler = null;
+			this.SyncDeviceHandler = null;
 		}
 
 		public void setAdapter(IAdapter adapter)
@@ -46,7 +46,6 @@ namespace Motion.Core.SyncHandler
 			this.Adapter.DeviceConnected += Adapter_DeviceConnected;
 			this.Adapter.DeviceDisconnected += Adapter_DeviceDisconnected;
 			this.Adapter.DeviceFailedToConnect += Adapter_DeviceFailedToConnect;
-			//this.Adapter.CommandResponse += Adapter_CommandResponse;
 		}
 
 		public static SyncHandler GetInstance()
@@ -140,19 +139,21 @@ namespace Motion.Core.SyncHandler
 			/*else */if (this.Device.Name.Replace("PE", "").Replace("FT", "").StartsWith("961"))
 			{
 				Debug.WriteLine("Instantiating PE/FT961 Handler");
-				this.syncDeviceHandler = SyncDeviceHandler961.GetInstance();
+				this.SyncDeviceHandler = SyncDeviceHandler961.GetInstance();
 			}
 
-			this.syncDeviceHandler.SetAdapter(this.Adapter);
-			this.syncDeviceHandler.SetDevice(this.Device);
+			this.SyncDeviceHandler.SetAdapter(this.Adapter);
+			this.SyncDeviceHandler.SetDevice(this.Device);
 
 			e.Device.ServicesDiscovered += Services_Discovered;
+			//this.Adapter.CommandResponse += SyncDeviceHandler.ReceiveResponse;
 			e.Device.DiscoverServices();
 		}
 
 		void Adapter_DeviceDisconnected(object sender, DeviceConnectionEventArgs e)
 		{
 			e.Device.ServicesDiscovered -= Services_Discovered;
+			this.SyncDeviceHandler.CleanUp();
 		}
 
 		void Adapter_DeviceFailedToConnect(object sender, DeviceConnectionEventArgs e)
@@ -221,7 +222,7 @@ namespace Motion.Core.SyncHandler
 
 		private void startSyncProcess()
 		{
-			this.syncDeviceHandler.StartSync();
+			this.SyncDeviceHandler.StartSync();
 		}
 
 		private IService GetService(ICharacteristic chr)

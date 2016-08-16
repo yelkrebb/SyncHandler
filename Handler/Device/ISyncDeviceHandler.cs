@@ -13,6 +13,8 @@ namespace Motion.Core.SyncHandler
 
 		ICharacteristic GetServicesCharacterisitic(Constants.CharacteristicsUUID uuid);
 
+		void ReceiveResponse(object sender, CommandResponseEventArgs e);
+
 		void ProcessCommands();
 
 		void CleanUp();

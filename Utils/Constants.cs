@@ -59,7 +59,8 @@ namespace Motion.Core.SyncHandler
 			ReadFwVersion,
 			ReadBatteryLevel,
 			ReadManufacturer,
-			GetWsDeviceInfo
+			GetWsDeviceInfo,
+			ReadStepsHeader
 		}
 
 		//Streamlines DB Web Services Method Names

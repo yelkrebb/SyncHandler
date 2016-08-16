@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
+using Motion.Core.WSHandler;
 using Motion.Mobile.Core.BLE;
 
 namespace Motion.Core.SyncHandler
@@ -13,18 +15,21 @@ namespace Motion.Core.SyncHandler
 
 		private IAdapter Adapter;
 		private IDevice Device;
+		private IWebServicesWrapper WebService;
 
-		private ICharacteristic ff07Char;
-		private ICharacteristic ff08Char;
-		private ICharacteristic readChar;
+		private ICharacteristic Ff07Char;
+		private ICharacteristic Ff08Char;
+		private ICharacteristic ReadChar;
 
-		private Queue<Constants.SyncHandlerSequence> processQeueue = new Queue<Constants.SyncHandlerSequence>();
-		private Constants.SyncHandlerSequence command;
-		//private EventHandler<CharacteristicReadEventArgs> CharValueUpdated = null;
+		private Queue<Constants.SyncHandlerSequence> ProcessQeueue = new Queue<Constants.SyncHandlerSequence>();
+		private Constants.SyncHandlerSequence Command;
 		private EventHandler<CharacteristicReadEventArgs> NotifyStateUpdated = null;
+
+		private List<byte[]> packetsReceived = new List<byte[]>();
 
 		private SyncDeviceHandler961()
 		{
+			WebService = new WebService();
 		}
 
 		public static SyncDeviceHandler961 GetInstance()
@@ -45,20 +50,23 @@ namespace Motion.Core.SyncHandler
 
 		public void CleanUp()
 		{
-			throw new NotImplementedException();
+			this.ProcessQeueue.Clear();
+			this.Device = null;
 		}
 
 		public void StartSync()
 		{
 			Debug.WriteLine("SyncDeviceHandler961: Start syncing-...");
 			//this.GetServicesCharacterisitic();
-			this.processQeueue.Enqueue(Constants.SyncHandlerSequence.EnableFF07);
-			this.processQeueue.Enqueue(Constants.SyncHandlerSequence.EnableFF08);
-			this.processQeueue.Enqueue(Constants.SyncHandlerSequence.ReadModel);
-			this.processQeueue.Enqueue(Constants.SyncHandlerSequence.ReadSerial);
-			this.processQeueue.Enqueue(Constants.SyncHandlerSequence.ReadFwVersion);
-			this.processQeueue.Enqueue(Constants.SyncHandlerSequence.ReadBatteryLevel);
-			this.processQeueue.Enqueue(Constants.SyncHandlerSequence.ReadManufacturer);
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.EnableFF07);
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.EnableFF08);
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadModel);
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadSerial);
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadFwVersion);
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadBatteryLevel);
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadManufacturer);
+			//this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.GetWsDeviceInfo);
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadStepsHeader);
 			this.ProcessCommands();
 		}
 
@@ -66,9 +74,9 @@ namespace Motion.Core.SyncHandler
 		{
 			Debug.WriteLine("SyncHandler: ProcessCommands");
 
-			if (this.processQeueue.Count > 0)
+			if (this.ProcessQeueue.Count > 0)
 			{
-				command = this.processQeueue.Dequeue();
+				Command = this.ProcessQeueue.Dequeue();
 			}
 			else {
 				Debug.WriteLine("No more commands to be processed!");
@@ -77,53 +85,82 @@ namespace Motion.Core.SyncHandler
 
 			ICharacteristic chr = null;
 
-			switch (command)
+			switch (Command)
 			{
 				case Constants.SyncHandlerSequence.EnableFF07:
 					Debug.WriteLine("SyncDeviceHandler961: Enabling FF07 characteristic");
-					ff07Char = GetServicesCharacterisitic(Constants.CharacteristicsUUID._FF07);
-					if (ff07Char == null) Debug.WriteLine("FF07 is NULL");
-					ff07Char.StartUpdates();
+					Ff07Char = GetServicesCharacterisitic(Constants.CharacteristicsUUID._FF07);
+					if (Ff07Char == null)
+					{
+						Debug.WriteLine("FF07 is NULL. Disconnecting device.");
+						this.Adapter.DisconnectDevice(Device);
+					}
+					else {
+						Ff07Char.StartUpdates();
+					}
 					break;
 				case Constants.SyncHandlerSequence.EnableFF08:
 					Debug.WriteLine("SyncDeviceHandler961: Enabling FF08 characteristic");
-					ff08Char = GetServicesCharacterisitic(Constants.CharacteristicsUUID._FF08);
-					ff08Char.StartUpdates();
+					Ff08Char = GetServicesCharacterisitic(Constants.CharacteristicsUUID._FF08);
+					if (Ff08Char == null)
+					{
+						Debug.WriteLine("FF08 is NULL. Disconnecting device.");
+						this.Adapter.DisconnectDevice(Device);
+					}
+					else {
+						Ff08Char.StartUpdates();
+					}
 					break;
 				case Constants.SyncHandlerSequence.ReadModel:
 					Debug.WriteLine("SyncDeviceHandler961: Reading model from characteristic.");
-					readChar = GetServicesCharacterisitic(Constants.CharacteristicsUUID._2A24);
-					chr = await readChar.ReadAsync();
+					ReadChar = GetServicesCharacterisitic(Constants.CharacteristicsUUID._2A24);
+					chr = await ReadChar.ReadAsync();
 					Debug.WriteLine("Model: " + System.Text.Encoding.UTF8.GetString(chr.Value, 0, chr.Value.Length));
 					ProcessCommands();
 					break;
 				case Constants.SyncHandlerSequence.ReadSerial:
 					Debug.WriteLine("SyncDeviceHandler961: Reading serial from characterisitic.");
-					readChar = GetServicesCharacterisitic(Constants.CharacteristicsUUID._2A25);
-					chr = await readChar.ReadAsync();
+					ReadChar = GetServicesCharacterisitic(Constants.CharacteristicsUUID._2A25);
+					chr = await ReadChar.ReadAsync();
 					Debug.WriteLine("Serial: " + System.Text.Encoding.UTF8.GetString(chr.Value, 0, chr.Value.Length));
 					ProcessCommands();
 					break;
 				case Constants.SyncHandlerSequence.ReadFwVersion:
 					Debug.WriteLine("SyncDeviceHandler961: Reading fw version from characteristic.");
-					readChar = GetServicesCharacterisitic(Constants.CharacteristicsUUID._2A26);
-					chr = await readChar.ReadAsync();
+					ReadChar = GetServicesCharacterisitic(Constants.CharacteristicsUUID._2A26);
+					chr = await ReadChar.ReadAsync();
 					Debug.WriteLine("Firmware Version: " + System.Text.Encoding.UTF8.GetString(chr.Value, 0, chr.Value.Length));
 					ProcessCommands();
 					break;
 				case Constants.SyncHandlerSequence.ReadManufacturer:
 					Debug.WriteLine("SyncDeviceHandler961: Reading manufacturer from characteristic.");
-					readChar = GetServicesCharacterisitic(Constants.CharacteristicsUUID._2A29);
-					chr = await readChar.ReadAsync();
+					ReadChar = GetServicesCharacterisitic(Constants.CharacteristicsUUID._2A29);
+					chr = await ReadChar.ReadAsync();
 					Debug.WriteLine("Manufacturer: " + System.Text.Encoding.UTF8.GetString(chr.Value, 0, chr.Value.Length));
 					ProcessCommands();
 					break;
 				case Constants.SyncHandlerSequence.ReadBatteryLevel:
 					Debug.WriteLine("SyncDeviceHandler961: Reading battery level from characteristic.");
-					readChar = GetServicesCharacterisitic(Constants.CharacteristicsUUID._2A19);
-					chr = await readChar.ReadAsync();
+					ReadChar = GetServicesCharacterisitic(Constants.CharacteristicsUUID._2A19);
+					chr = await ReadChar.ReadAsync();
 					Debug.WriteLine("Battery Level: " + (int) chr.Value[0]);
 					ProcessCommands();
+					break;
+				case Constants.SyncHandlerSequence.ReadStepsHeader:
+					Debug.WriteLine("SyncDeviceHandler961: Read Steps Header-");
+					var data = new byte[] { 0x1B, 0x22};
+					this.Adapter.CommandResponse += ReceiveResponse;
+					this.Adapter.SendCommand(Ff07Char, data);
+					break;
+				case Constants.SyncHandlerSequence.GetWsDeviceInfo:
+					Debug.WriteLine("SyncDeviceHandler961: WS Request GetDeviceInfo");
+					Dictionary<String, object> parameter = new Dictionary<String, object>();
+					parameter.Add("serno", "9999999894");
+					parameter.Add("fwver", "4.3");
+					parameter.Add("mdl", "961");
+					parameter.Add("aid", 16781);
+					parameter.Add("ddtm", "16-08-12 14:15");
+					await WebService.PostData("https://test.savvysherpa.com/DeviceServices/api/Pedometer/GetDeviceInfo", parameter);
 					break;
 				default:
 					Debug.WriteLine("SyncDeviceHandler961: Unable to identify command.");
@@ -148,10 +185,8 @@ namespace Motion.Core.SyncHandler
 
 			foreach (var service in this.Device.Services)
 			{
-				//Debug.WriteLine("Service: " + service.ID);
 				foreach (var chr in service.Characteristics)
 				{
-					//Debug.WriteLine("Characteristic: " + chr.ID);
 					if (chr.Uuid.ToString().ToUpper().Contains(uuid.ToString().Replace("_", "")))
 					{
 						Debug.WriteLine("Characteristic Found: " + chr.ID);
@@ -176,7 +211,7 @@ namespace Motion.Core.SyncHandler
 		public void NotifyStateUpdateDone(object sender, CharacteristicReadEventArgs e)
 		{
 			Debug.WriteLine("SyncHandlerDevice961: Notification State Updated: " + e.Characteristic.ID);
-			switch (command)
+			switch (Command)
 			{
 				case Constants.SyncHandlerSequence.EnableFF07:
 					Debug.WriteLine("Done enabling FF07");
@@ -190,6 +225,27 @@ namespace Motion.Core.SyncHandler
 											
 			}
 			this.ProcessCommands();
+		}
+
+		public void ReceiveResponse(object sender, CommandResponseEventArgs e)
+		{
+			Debug.WriteLine("Receiving Response: " + Utils.ByteArrayToHexString(e.Data));
+
+			switch (this.Command)
+			{
+				case Constants.SyncHandlerSequence.ReadStepsHeader:
+					Debug.WriteLine("Receiving steps header data: " + Utils.ByteArrayToHexString(e.Data));
+					this.packetsReceived.Add(e.Data);
+					if (Utils.LastPacketReceived(2, e.Data))
+					{
+						Debug.WriteLine("Last packet received...");
+						//Process Data Here...
+						this.ProcessCommands();
+					}
+					break;
+				default:
+					break;
+			}
 		}
 
 		public void DescriptorWrite(object sender, EventArgs e)
