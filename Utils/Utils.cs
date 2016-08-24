@@ -18,13 +18,12 @@ namespace Motion.Core.SyncHandler
 			{
 				result = true;
 			}
-			return result;
-		}
 
-		public static String ByteArrayToHexString(byte[] data)
-		{
-			string hex = BitConverter.ToString(data);
-			return hex.Replace("-", "");
+			//if (advertiseName.StartsWith("H25FE2"))
+			//{
+			//	result = true;
+			//}
+			return result;
 		}
 
 		public static bool TerminatorFound(byte terminatorChar, int terminatorLength, byte[] data)
@@ -36,6 +35,9 @@ namespace Motion.Core.SyncHandler
 				if (b == terminatorChar)
 				{
 					count++;
+				}
+				else {
+					count = 0;
 				}
 				if (count >= terminatorLength)
 				{

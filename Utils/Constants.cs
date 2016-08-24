@@ -29,7 +29,9 @@ namespace Motion.Core.SyncHandler
 			_FF01, //Trio Custom Service
 			_180A, //Device Information
 			_180F, //Battery Level
-			_1530 //DFU Service
+			_1530, //DFU Service
+
+			_67FE //Striiv GCP
 		}
 
 		//BLE Characteristics
@@ -47,11 +49,16 @@ namespace Motion.Core.SyncHandler
 
 			//[Battery Service]
 			_2A19, //Battery Level
+
+			//[Striiv]
+			_FE23, //TX (Notify)
+			_9A0A  //RX (Write, Write w/o response
 		}
 
 		//SyncHandler Sequence Names
 		public enum SyncHandlerSequence
 		{
+			Default,
 			EnableFF07,
 			EnableFF08,
 			ReadSerial,
@@ -59,8 +66,45 @@ namespace Motion.Core.SyncHandler
 			ReadFwVersion,
 			ReadBatteryLevel,
 			ReadManufacturer,
-			GetWsDeviceInfo,
-			ReadStepsHeader
+			ReadTallies,
+			ReadDeviceInformation,
+			ReadUserSettings,
+			ReadDeviceStatus,
+			ReadDeviceSettings,
+			ReadStepsHeader,
+			ReadHourlySteps,
+			ReadCurrentHour,
+			ReadSignature,
+			ReadSeizureTable,
+			ReadSeizure,
+			WriteStepsHeader,
+			WriteDeviceSettings,
+			WriteUserSettings,
+			WriteExerciseSettings,
+			WriteCompanySettings,
+			WriteSignatureSettings,
+			WriteSeizureSettings,
+			WriteScreenFlow,
+			WriteDeviceSensitivity,
+			WriteDeviceStatus,
+			WriteScreenDisplay,
+			ClearEEProm,
+			WsGetDeviceInfo,
+			WsUploadTallies,
+			WsUploadSteps,
+			WsUploadSignature,
+			WsUploadProfile,
+			WsUnpairDevice,
+			WsUploadSeizure,
+			WsSendNotifySettingsUpdate
+		}
+
+		public enum StriivSyncHandlerSequence
+		{
+			Default,
+			EnableFE23,
+			RegisterRead,
+			RegisterWrite
 		}
 
 		//Streamlines DB Web Services Method Names
@@ -101,6 +145,12 @@ namespace Motion.Core.SyncHandler
 			SINGLE_SIGN_ON,
 			VALIDATE_USER,
 
+		}
+
+		public enum ScanType
+		{
+			ACTIVATION,
+			SYNCING
 		}
 
 	}

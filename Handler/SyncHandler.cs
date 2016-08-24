@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using Motion.Core.WSHandler;
 using Motion.Mobile.Core.BLE;
+using Motion.Mobile.Utilities;
 
 namespace Motion.Core.SyncHandler
 {
@@ -14,24 +16,31 @@ namespace Motion.Core.SyncHandler
 		public event EventHandler ScanStarted = delegate { };
 		public event EventHandler ScanStopped = delegate { };
 		public event EventHandler DeviceConnected = delegate { };
+		public event EventHandler DeviceDisconnected = delegate { };
 		public event EventHandler ProgressIncrement = delegate { };
 		public event EventHandler<SyncProgressCalculatedEventArgs> ProgressCalculated = delegate {};
-		public event EventHandler SyncDone = delegate { };
-		public event EventHandler SyncFailed = delegate { };
+		public event EventHandler<CharactersDisplayedEventArgs> CharacterssDisplayed = delegate {};
+		public event EventHandler<SyncDoneEventArgs> SyncDone = delegate { };
+		public event EventHandler<BTStateEventArgs> BTStateChanged = delegate { };
 
 		private IAdapter Adapter;
 		private IDevice Device;
 		private ISyncDeviceHandler SyncDeviceHandler;
+		private IWebServicesWrapper WebService;
 
 		private List<Guid> serviceList;
 		private bool InScanningMode;
+		private bool ProcessingDevice;
+		private Constants.ScanType ScanType;
 
 
 		public SyncHandler()
 		{
 			this.InScanningMode = false;
+			this.ProcessingDevice = false;
 			serviceList = new List<Guid>();
 			serviceList.Add(0x180F.UuidFromPartial ());
+			serviceList.Add(new Guid("278B67FE-266B-406C-BD40-25379402B58D"));
 			this.SyncDeviceHandler = null;
 		}
 
@@ -46,6 +55,23 @@ namespace Motion.Core.SyncHandler
 			this.Adapter.DeviceConnected += Adapter_DeviceConnected;
 			this.Adapter.DeviceDisconnected += Adapter_DeviceDisconnected;
 			this.Adapter.DeviceFailedToConnect += Adapter_DeviceFailedToConnect;
+		}
+
+		public void SetWebServiceWrapper(IWebServicesWrapper webserviceWrapper)
+		{
+			this.WebService = webserviceWrapper;
+		}
+
+		//GUI to set application info retrieved from ws.
+		//AppInfo will be used during data uploading
+		public void SetAppInfo()
+		{
+		}
+
+		//GUI to set user info retrieved from ws.
+		//UserInfo will be used during data uploading
+		public void SetUserInfo()
+		{
 		}
 
 		public static SyncHandler GetInstance()
@@ -63,11 +89,24 @@ namespace Motion.Core.SyncHandler
 			return Instance;
 		}
 
-		public async void StartScan()
+		void UpdateProgressBar(object sender, EventArgs args)
+		{
+			this.ProgressIncrement(this, new EventArgs() { });
+		}
+
+		void DoneSyncing(object sender, SyncDoneEventArgs args)
+		{
+			this.SyncDone(this, new SyncDoneEventArgs() {  });
+		}
+
+		public async void StartScan(Constants.ScanType scanType)
 		{
 			Debug.WriteLine("SyncHandler: StartScan");
+
+			this.ScanType = scanType;
 			if (this.Adapter != null && !this.Adapter.IsScanning)
 			{
+				this.ScanStarted(this, new EventArgs() { });
 				await Task.Delay(500);
 				this.InScanningMode = true;
 				this.Adapter.StartScanningForDevices(this.serviceList);
@@ -80,20 +119,28 @@ namespace Motion.Core.SyncHandler
 
 		public void StopScan()
 		{
+			this.ScanStopped(this, new EventArgs() { });
 			this.InScanningMode = false;
 			this.Adapter.StopScanningForDevices();
-			this.ScanStopped(this, new EventArgs());
 		}
 
 		public void Connect(IDevice device )
 		{
+			this.ProcessingDevice = true;
 			this.Adapter.ConnectToDevice(device);
 		}
 
 		public void Disconnect()
 		{
-			Debug.WriteLine("SyncHandler: Device Disconnected");
-			this.Adapter.StartScanningForDevices();
+			this.Adapter.DisconnectDevice(Device);
+
+			this.SyncDeviceHandler.IncrementProgressBar -= UpdateProgressBar;
+			this.SyncDeviceHandler.SyncDone -= DoneSyncing;
+		}
+
+		public void StartWriteSettings()
+		{
+			this.SyncDeviceHandler.StartWriteSettings();
 		}
 
 		//**********EVENTS RECEIVED FROM BLE - Start
@@ -107,7 +154,7 @@ namespace Motion.Core.SyncHandler
 			Debug.WriteLine("SyncHandler: Scan Completed");
 			if (this.InScanningMode)
 			{
-				this.StartScan();
+				this.StartScan(this.ScanType);
 			}
 		}
 
@@ -116,11 +163,15 @@ namespace Motion.Core.SyncHandler
 			Debug.WriteLine("SyncHandler: Device Discovered.");
 			if (e.Device.Name != null)
 			{
-				if (Utils.isValidDevice(e.Device.Name))
+				if (!this.ProcessingDevice && Utils.isValidDevice(e.Device.Name))
 				{
 					Debug.WriteLine("Found Valid Device");
 					this.StopScan();
 					this.Connect(e.Device);
+				}
+				else if (this.ProcessingDevice)
+				{
+					Debug.WriteLine("Currently processing valid device.");
 				}
 			}
 		}
@@ -136,14 +187,23 @@ namespace Motion.Core.SyncHandler
 			//	Debug.WriteLine("Instantiating PE932 Handler");
 			//	this.syncDeviceHandler = SyncDeviceHandler932.GetInstance();
 			//}
-			/*else */if (this.Device.Name.Replace("PE", "").Replace("FT", "").StartsWith("961"))
+			/*else */
+			if (this.Device.Name.Replace("PE", "").Replace("FT", "").StartsWith("961"))
 			{
 				Debug.WriteLine("Instantiating PE/FT961 Handler");
 				this.SyncDeviceHandler = SyncDeviceHandler961.GetInstance();
+
 			}
+			else if (this.Device.Name.StartsWith("H25FE2")) {
+				this.SyncDeviceHandler = SyncDeviceHandlerStriiv.GetInstance();
+			}
+
+			this.SyncDeviceHandler.IncrementProgressBar += UpdateProgressBar;
+			this.SyncDeviceHandler.SyncDone += DoneSyncing;
 
 			this.SyncDeviceHandler.SetAdapter(this.Adapter);
 			this.SyncDeviceHandler.SetDevice(this.Device);
+			this.SyncDeviceHandler.SetWebService(this.WebService);
 
 			e.Device.ServicesDiscovered += Services_Discovered;
 			//this.Adapter.CommandResponse += SyncDeviceHandler.ReceiveResponse;
@@ -152,8 +212,22 @@ namespace Motion.Core.SyncHandler
 
 		void Adapter_DeviceDisconnected(object sender, DeviceConnectionEventArgs e)
 		{
+			Debug.WriteLine("SyncHandler: Device Disconnected");
+
+			this.DeviceDisconnected(this, new EventArgs() { });
+
+			this.ProcessingDevice = false;
+			this.Device = null;
 			e.Device.ServicesDiscovered -= Services_Discovered;
-			this.SyncDeviceHandler.CleanUp();
+
+			if (this.SyncDeviceHandler != null)
+			{
+				this.SyncDeviceHandler.CleanUp();
+			}
+
+			this.DeviceDisconnected(this, new EventArgs { });
+
+			this.Adapter.StartScanningForDevices();
 		}
 
 		void Adapter_DeviceFailedToConnect(object sender, DeviceConnectionEventArgs e)
@@ -222,7 +296,7 @@ namespace Motion.Core.SyncHandler
 
 		private void startSyncProcess()
 		{
-			this.SyncDeviceHandler.StartSync();
+			this.SyncDeviceHandler.StartSync(this.ScanType);
 		}
 
 		private IService GetService(ICharacteristic chr)
