@@ -84,7 +84,10 @@ namespace Motion.Core.SyncHandler
 			UserInformationInstance = userInfo;
 		}
 
-
+		public void SendAppInfo()
+		{ 
+			// need to implement to send application info to server
+		}
 
 		public static SyncHandler GetInstance()
 		{

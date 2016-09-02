@@ -129,7 +129,9 @@ namespace Motion.Core.SyncHandler
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadManufacturer);
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteScreenDisplay);
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ActivateDeviceWithMember);
-
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteDeviceSettings);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ClearEEProm);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteUserSettings);
 
 
 
@@ -313,13 +315,13 @@ namespace Motion.Core.SyncHandler
 					break;
 				case Constants.SyncHandlerSequence.WriteDeviceSettings:
 					Debug.WriteLine("SyncDeviceHandler961: Writing device settings");
-
-					String serverTime = ActivateDeviceWithMemberResponseInstance.ServerDateTime;
-					//CommandRequest = await DeviceSettingsInstance.GetWriteCommand();
-					//this.Adapter.SendCommand(Ff07Char, CommandRequest);
+					CommandRequest = await DeviceSettingsInstance.GetWriteCommand();
+					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 				case Constants.SyncHandlerSequence.WriteUserSettings:
 					Debug.WriteLine("SyncDeviceHandler961: Writing user settings");
+					CommandRequest = await UserSettingsInstance.GetWriteCommand();
+					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 				case Constants.SyncHandlerSequence.WriteExerciseSettings:
 					Debug.WriteLine("SyncDeviceHandler961: Writing exercise settings");
@@ -381,7 +383,11 @@ namespace Motion.Core.SyncHandler
 					{
 						Debug.WriteLine("Success");
 						ActivateDeviceWithMemberResponseInstance = ActivateDeviceWithMemberInstance.response;
-						this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteDeviceSettings);
+						if (ActivateDeviceWithMemberResponseInstance != null)
+							this.SetSettingsFromWebServer();
+						else
+							    
+							Debug.WriteLine("ActivateDeviceWithMemeber Response is null");
 						ProcessCommands();
 					}
 					//this.Adapter.SendCommand(Ff07Char, CommandRequest);
@@ -633,8 +639,18 @@ namespace Motion.Core.SyncHandler
 				case Constants.SyncHandlerSequence.WriteStepsHeader:
 					break;
 				case Constants.SyncHandlerSequence.WriteDeviceSettings:
+					this.ParsingStatus = await DeviceSettingsInstance.ParseData(e.Data);
+					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
+					{
+						this.ProcessCommands();
+					}
 					break;
 				case Constants.SyncHandlerSequence.WriteUserSettings:
+					this.ParsingStatus = await UserSettingsInstance.ParseData(e.Data);
+					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
+					{
+						this.ProcessCommands();
+					}
 					break;
 				case Constants.SyncHandlerSequence.WriteExerciseSettings:
 					break;
@@ -727,6 +743,67 @@ namespace Motion.Core.SyncHandler
 			UserInformationInstance = userInfo;
 		}
 
+		private void SetSettingsFromWebServer()
+		{
+
+			//User Settings
+			UserSettingsInstance.Stride = ActivateDeviceWithMemberResponseInstance.userSettings.Stride;
+			UserSettingsInstance.Weight = ActivateDeviceWithMemberResponseInstance.userSettings.Weight;
+			UserSettingsInstance.RestMetabolicRate = ActivateDeviceWithMemberResponseInstance.userSettings.RestMetabolicRate;
+			UserSettingsInstance.UnitOfMeasure = ActivateDeviceWithMemberResponseInstance.userSettings.UnitOfMeasure;
+			UserSettingsInstance.DOBYear = ActivateDeviceWithMemberResponseInstance.userSettings.DOBYear;
+			UserSettingsInstance.DOBMonth = ActivateDeviceWithMemberResponseInstance.userSettings.DOBMonth;
+			UserSettingsInstance.DOBDay = ActivateDeviceWithMemberResponseInstance.userSettings.DOBDay;
+			UserSettingsInstance.Age = ActivateDeviceWithMemberResponseInstance.userSettings.Age;
+
+			// Device Settings
+			string serverTime = ActivateDeviceWithMemberResponseInstance.ServerDateTime;
+			bool timeFormat = ActivateDeviceWithMemberResponseInstance.DeviceTimeFormat;
+
+			DateTime st = Motion.Mobile.Utilities.Utils.GetServerDateTimeFromString(serverTime);
+
+
+			Debug.WriteLine("Date Time" + st);
+			DeviceSettingsInstance.Year = st.Year;
+			DeviceSettingsInstance.Month = st.Month;
+			DeviceSettingsInstance.Day = st.Day;
+			DeviceSettingsInstance.Hour = st.Hour;
+			DeviceSettingsInstance.Minute = st.Minute;
+			DeviceSettingsInstance.Second = st.Second;
+			DeviceSettingsInstance.HourType = timeFormat;
+
+
+			//Company Settings
+			CompanySettingsInstance.TenacitySteps = ActivateDeviceWithMemberResponseInstance.companySettings.TenacitySteps;
+			CompanySettingsInstance.IntensitySteps = ActivateDeviceWithMemberResponseInstance.companySettings.IntensitySteps;
+			CompanySettingsInstance.IntensityTime = ActivateDeviceWithMemberResponseInstance.companySettings.IntensityTime;
+			CompanySettingsInstance.IntensityMinuteThreshold = ActivateDeviceWithMemberResponseInstance.companySettings.IntensityMinuteThreshold;
+			CompanySettingsInstance.IntensityRestMinuteAllowed = ActivateDeviceWithMemberResponseInstance.companySettings.IntensityRestMinuteAllowed;
+			CompanySettingsInstance.IntensityCycle = ActivateDeviceWithMemberResponseInstance.companySettings.IntensityCycle;
+			CompanySettingsInstance.FrequencySteps = ActivateDeviceWithMemberResponseInstance.companySettings.FrequencySteps;
+			CompanySettingsInstance.FrequencyCycleTime = ActivateDeviceWithMemberResponseInstance.companySettings.FrequencyCycleTime;
+			CompanySettingsInstance.FrequencyCycle = ActivateDeviceWithMemberResponseInstance.companySettings.FrequencyCycle;
+			CompanySettingsInstance.FrequencyCycleInterval = ActivateDeviceWithMemberResponseInstance.companySettings.FrequencyCycleInterval;
+
+			//Exercise Settings
+			ExerciseSettingsInstance.SyncTimeInterval = ActivateDeviceWithMemberResponseInstance.exerciseSettings.SyncTimeInterval;
+			ExerciseSettingsInstance.DataSyncEnable = ActivateDeviceWithMemberResponseInstance.exerciseSettings.DataSyncEnable;
+			ExerciseSettingsInstance.FrequencyAlarmEnable = ActivateDeviceWithMemberResponseInstance.exerciseSettings.FrequencyAlarmEnable;
+
+			//Signature Settings
+			SignatureSettingsInstance.SamplingFrequency = ActivateDeviceWithMemberResponseInstance.signatureSettings.SamplingFrequency;
+			SignatureSettingsInstance.SamplingTime = ActivateDeviceWithMemberResponseInstance.signatureSettings.SamplingTime;
+			SignatureSettingsInstance.SamplingCycle = ActivateDeviceWithMemberResponseInstance.signatureSettings.SamplingCycle;
+			SignatureSettingsInstance.SamplingThreshold = ActivateDeviceWithMemberResponseInstance.signatureSettings.SamplingThreshold;
+			SignatureSettingsInstance.SamplingTotalBlocks = ActivateDeviceWithMemberResponseInstance.signatureSettings.SamplingTotalBlocks;
+
+			//Seizure Settings
+			SeizureSettingsInstance.SeizureSettingsEnable = ActivateDeviceWithMemberResponseInstance.seizureSettings.SeizureSettingsEnable;
+			SeizureSettingsInstance.SeizureSamplingFrequency = ActivateDeviceWithMemberResponseInstance.seizureSettings.SeizureSamplingFrequency;
+			SeizureSettingsInstance.SeizureNumberOfRecords = ActivateDeviceWithMemberResponseInstance.seizureSettings.SeizureNumberOfRecords;
+			SeizureSettingsInstance.SeizureSamplingTime = ActivateDeviceWithMemberResponseInstance.seizureSettings.SeizureSamplingTime;
+
+		}
 	}
 }
 
