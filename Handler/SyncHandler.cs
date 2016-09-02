@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Motion.Core.WSHandler;
 using Motion.Mobile.Core.BLE;
 using Motion.Mobile.Utilities;
+using Motion.Core.Data.UserData;
+
 
 namespace Motion.Core.SyncHandler
 {
@@ -27,6 +29,7 @@ namespace Motion.Core.SyncHandler
 		private IDevice Device;
 		private ISyncDeviceHandler SyncDeviceHandler;
 		private IWebServicesWrapper WebService;
+		private UserInformation UserInformationInstance;
 
 		private List<Guid> serviceList;
 		private bool InScanningMode;
@@ -34,13 +37,14 @@ namespace Motion.Core.SyncHandler
 		private Constants.ScanType ScanType;
 
 
+
 		public SyncHandler()
 		{
 			this.InScanningMode = false;
 			this.ProcessingDevice = false;
 			serviceList = new List<Guid>();
-			serviceList.Add(0x180F.UuidFromPartial ());
-			serviceList.Add(new Guid("278B67FE-266B-406C-BD40-25379402B58D"));
+			//serviceList.Add(0x180F.UuidFromPartial ());
+			//serviceList.Add(new Guid("278B67FE-266B-406C-BD40-25379402B58D"));
 			this.SyncDeviceHandler = null;
 		}
 
@@ -57,6 +61,11 @@ namespace Motion.Core.SyncHandler
 			this.Adapter.DeviceFailedToConnect += Adapter_DeviceFailedToConnect;
 		}
 
+		public void SetServiceUUIList(List<Guid> serviceList)
+		{
+			this.serviceList = serviceList;
+		}
+
 		public void SetWebServiceWrapper(IWebServicesWrapper webserviceWrapper)
 		{
 			this.WebService = webserviceWrapper;
@@ -70,9 +79,12 @@ namespace Motion.Core.SyncHandler
 
 		//GUI to set user info retrieved from ws.
 		//UserInfo will be used during data uploading
-		public void SetUserInfo()
+		public void SetUserInfo(UserInformation userInfo)
 		{
+			UserInformationInstance = userInfo;
 		}
+
+
 
 		public static SyncHandler GetInstance()
 		{
@@ -192,6 +204,11 @@ namespace Motion.Core.SyncHandler
 			{
 				Debug.WriteLine("Instantiating PE/FT961 Handler");
 				this.SyncDeviceHandler = SyncDeviceHandler961.GetInstance();
+			}
+			else if (this.Device.Name.Replace("PE", "").Replace("FT", "").StartsWith("939"))
+			{
+				Debug.WriteLine("Instantiating PE939 Handler");
+				this.SyncDeviceHandler = SyncDeviceHandler939.GetInstance();
 
 			}
 			else if (this.Device.Name.StartsWith("H25FE2")) {
@@ -200,6 +217,7 @@ namespace Motion.Core.SyncHandler
 
 			this.SyncDeviceHandler.IncrementProgressBar += UpdateProgressBar;
 			this.SyncDeviceHandler.SyncDone += DoneSyncing;
+
 
 			this.SyncDeviceHandler.SetAdapter(this.Adapter);
 			this.SyncDeviceHandler.SetDevice(this.Device);
@@ -227,7 +245,7 @@ namespace Motion.Core.SyncHandler
 
 			this.DeviceDisconnected(this, new EventArgs { });
 
-			this.Adapter.StartScanningForDevices();
+			//this.Adapter.StartScanningForDevices();
 		}
 
 		void Adapter_DeviceFailedToConnect(object sender, DeviceConnectionEventArgs e)
@@ -321,6 +339,19 @@ namespace Motion.Core.SyncHandler
 			}
 
 			return svc;
+		}
+
+		public bool ValidateActivationCode(String enteredCode)
+		{
+			try
+			{
+				return this.SyncDeviceHandler.ValidateActivationCode(enteredCode);
+			}
+			catch (Exception exception)
+			{
+				Debug.WriteLine(exception.StackTrace.ToString());
+				throw new Exception("Error in validating activation code.");
+			}
 		}
 
 	}

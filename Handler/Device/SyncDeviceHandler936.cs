@@ -1,9 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading.Tasks;
+using Motion.Core.Data.BleData;
+using Motion.Core.Data.BleData.Trio;
+using Motion.Core.Data.BleData.Trio.Others;
+using Motion.Core.Data.BleData.Trio.SettingsData;
+using Motion.Core.Data.BleData.Trio.StepsData;
 using Motion.Core.WSHandler;
 using Motion.Mobile.Core.BLE;
 using Motion.Mobile.Utilities;
+using Motion.Core.Data.UserData;
 
 namespace Motion.Core.SyncHandler
 {
@@ -22,6 +29,10 @@ namespace Motion.Core.SyncHandler
 		private ICharacteristic Ff07Char;
 		private ICharacteristic Ff08Char;
 		private ICharacteristic ReadChar;
+
+		private TrioDeviceInformation TrioDeviceInformationInstance;
+
+		private LCDTestDisplay LCDTestDisplayInstance;
 
 		private Queue<Constants.SyncHandlerSequence> ProcessQeueue = new Queue<Constants.SyncHandlerSequence>();
 		private Constants.SyncHandlerSequence Command;
@@ -275,13 +286,14 @@ namespace Motion.Core.SyncHandler
 					break;
 				case Constants.SyncHandlerSequence.WsGetDeviceInfo:
 					Debug.WriteLine("SyncDeviceHandler936: WS Request GetDeviceInfo");
-					Dictionary<String, object> parameter = new Dictionary<String, object>();
+					/*Dictionary<String, object> parameter = new Dictionary<String, object>();
 					parameter.Add("serno", "9999999894");
 					parameter.Add("fwver", "4.3");
 					parameter.Add("mdl", "961");
 					parameter.Add("aid", 16781);
 					parameter.Add("ddtm", "16-08-12 14:15");
 					await WebService.PostData("https://test.savvysherpa.com/DeviceServices/api/Pedometer/GetDeviceInfo", parameter);
+					*/
 					break;
 				default:
 					Debug.WriteLine("SyncDeviceHandler936: Unable to identify command.");
@@ -411,6 +423,8 @@ namespace Motion.Core.SyncHandler
 			this.ProcessQeueue.Clear();
 			this.StartIncrementProgress = false;
 
+			TrioDeviceInformationInstance = new TrioDeviceInformation();
+
 			if (this.ScanType == Constants.ScanType.ACTIVATION)
 			{
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteScreenDisplay);
@@ -426,12 +440,15 @@ namespace Motion.Core.SyncHandler
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadFwVersion);
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadBatteryLevel);
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadManufacturer);
+
+
+
 				//this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.GetWsDeviceInfo);
-				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadUserSettings);
-				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadDeviceStatus);
-				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadDeviceSettings);
-				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadStepsHeader);
-				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadCurrentHour);
+				//this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadUserSettings);
+				//this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadDeviceStatus);
+				//this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadDeviceSettings);
+				//this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadStepsHeader);
+				//this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadCurrentHour);
 			}
 			this.ProcessCommands();
 		}
@@ -446,6 +463,17 @@ namespace Motion.Core.SyncHandler
 		{
 			this.WebService = webservice;
 		}
+
+		public bool ValidateActivationCode(string enteredCode)
+		{
+			throw new NotImplementedException();
+		}
+
+		public void SetUserInfo(UserInformation userInfo)
+		{
+			throw new NotImplementedException();
+		}
+
 	}
 }
 

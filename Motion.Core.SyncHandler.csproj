@@ -31,7 +31,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Utils\Constants.cs" />
     <Compile Include="Handler\SyncHandler.cs" />
     <Compile Include="Handler\Device\ISyncDeviceHandler.cs" />
     <Compile Include="Handler\Device\SyncDeviceHandler932.cs" />
@@ -41,6 +40,12 @@
     <Compile Include="Handler\Device\SyncDeviceHandler965.cs" />
     <Compile Include="Handler\Events\SyncProgressCalculatedEventArgs.cs" />
     <Compile Include="Utils\Utils.cs" />
+    <Compile Include="Handler\Events\BTStateEventArgs.cs" />
+    <Compile Include="Handler\Device\SyncDeviceHandlerStriiv.cs" />
+    <Compile Include="Handler\Events\CharactersDisplayedEventArgs.cs" />
+    <Compile Include="Handler\Events\SyncDoneEventArgs.cs" />
+    <Compile Include="Handler\Events\StatusEventArgs.cs" />
+    <Compile Include="Handler\Events\LoginEventArgs.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Plugin.Connectivity">
@@ -62,13 +67,17 @@
       <Project>{A7A50F8B-A665-4E9F-870C-869F846F08EF}</Project>
       <Name>Motion.Core.WSHandler</Name>
     </ProjectReference>
-    <ProjectReference Include="..\Motion.Core.Data\Motion.Core.Data.csproj">
-      <Project>{87DF2A80-E7CB-4009-B8C5-7289F477DAC7}</Project>
-      <Name>Motion.Core.Data</Name>
-    </ProjectReference>
     <ProjectReference Include="..\Motion.Mobile.Utilities\Motion.Mobile.Utilities.csproj">
       <Project>{075395FC-AD59-492A-B895-E9BA0001966C}</Project>
       <Name>Motion.Mobile.Utilities</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Motion.Misc.Logger\Motion.Misc.Logger.csproj">
+      <Project>{F6C9CD61-F29D-4CC8-B7D1-4D79A1C9A16F}</Project>
+      <Name>Motion.Misc.Logger</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Motion.Core.Data\Motion.Core.Data.csproj">
+      <Project>{87DF2A80-E7CB-4009-B8C5-7289F477DAC7}</Project>
+      <Name>Motion.Core.Data</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

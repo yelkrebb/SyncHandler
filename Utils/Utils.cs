@@ -3,6 +3,7 @@ namespace Motion.Core.SyncHandler
 {
 	public class Utils
 	{
+		private static Random random;
 		public Utils()
 		{
 		}
@@ -14,15 +15,16 @@ namespace Motion.Core.SyncHandler
 			if (/*advertiseName.StartsWith("932") ||
 				advertiseName.StartsWith("936") ||
 				advertiseName.StartsWith("939") ||*/
-			    advertiseName.StartsWith("961"))
+			    advertiseName.Contains("0002001668"))
+			    //advertiseName.Contains("1134679"))
 			{
 				result = true;
 			}
 
-			//if (advertiseName.StartsWith("H25FE2"))
-			//{
-			//	result = true;
-			//}
+			if (advertiseName.StartsWith("H25FE2"))
+			{
+				result = true;
+			}
 			return result;
 		}
 
@@ -60,6 +62,26 @@ namespace Motion.Core.SyncHandler
 			}
 
 			return lastPacket;
+		}
+
+		public static byte[] GetRandomDigits(int length)
+		{
+			if (random == null) random = new Random();
+
+			byte[] generated = new byte[length];
+			for (int i = 0; i < length; i++)
+			{
+				byte gen = (byte) (random.Next(0, 9) + 48 );
+				generated[i] = gen;
+			}
+			return generated;
+		}
+
+		public static bool ValidateActivationCode(String generated, String entered)
+		{
+			int result = 0;
+			String.Compare(generated, entered, StringComparison.Ordinal);
+			return (result > 0 ? false : true);
 		}
 
 	}

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using Motion.Core.WSHandler;
 using Motion.Mobile.Core.BLE;
 using Motion.Mobile.Utilities;
+using Motion.Core.Data.UserData;
 
 namespace Motion.Core.SyncHandler
 {
@@ -241,7 +242,7 @@ namespace Motion.Core.SyncHandler
 					Debug.WriteLine("SyncDeviceHandler936: Clear eeprom");
 					break;
 				case Constants.SyncHandlerSequence.WsGetDeviceInfo:
-					Debug.WriteLine("SyncDeviceHandler936: WS Request GetDeviceInfo");
+					/*Debug.WriteLine("SyncDeviceHandler936: WS Request GetDeviceInfo");
 					Dictionary<String, object> parameter = new Dictionary<String, object>();
 					parameter.Add("serno", "9999999894");
 					parameter.Add("fwver", "4.3");
@@ -249,6 +250,7 @@ namespace Motion.Core.SyncHandler
 					parameter.Add("aid", 16781);
 					parameter.Add("ddtm", "16-08-12 14:15");
 					await WebService.PostData("https://test.savvysherpa.com/DeviceServices/api/Pedometer/GetDeviceInfo", parameter);
+					*/
 					break;
 				default:
 					Debug.WriteLine("SyncDeviceHandler936: Unable to identify command.");
@@ -366,6 +368,17 @@ namespace Motion.Core.SyncHandler
 		{
 			this.WebService = webservice;
 		}
+
+		public bool ValidateActivationCode(string enteredCode)
+		{
+			throw new NotImplementedException();
+		}
+
+		public void SetUserInfo(UserInformation userInfo)
+		{
+			throw new NotImplementedException();
+		}
+
 	}
 }
 

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using Motion.Core.WSHandler;
 using Motion.Mobile.Core.BLE;
 using Motion.Mobile.Utilities;
+using Motion.Core.Data.UserData;
 
 namespace Motion.Core.SyncHandler
 {
@@ -113,15 +114,50 @@ namespace Motion.Core.SyncHandler
 						CharFE23.StartUpdates();
 					}
 					break;
+				case Constants.StriivSyncHandlerSequence.Ack:
+					Debug.WriteLine("Ack response");
+					CommandRequest = new byte[] { 0x08 };
+					this.Adapter.SendCommand(Char9A0A, CommandRequest);
+					break;
+				case Constants.StriivSyncHandlerSequence.DeviceInfo:
+					Debug.WriteLine("Read Device Info");
+					CommandRequest = new byte[] { 0x06 };
+					this.Adapter.SendCommand(Char9A0A, CommandRequest);
+					break;
 				case Constants.StriivSyncHandlerSequence.RegisterRead:
 					Debug.WriteLine("Register Read Command");
-					CommandRequest = new byte[] { 0x06 };
+					CommandRequest = new byte[] { 0x00 };
 					this.Adapter.SendCommand(Char9A0A, CommandRequest);
 					break;
 				case Constants.StriivSyncHandlerSequence.RegisterWrite:
 					Debug.WriteLine("Register Write Time");
-					//CommandRequest = new byte[] { 0x81, 0x00, 0x00, 0x00, 0x30, 0x1E, 0x02, 0x16, 0x07, 0x07, 0xE0 };
-					CommandRequest = new byte[] { 0x00 };
+					//CommandRequest = new byte[] { 0x01, 0x00, 0x00, 0x00, 0x30, 0x1E, 0x02, 0x16, 0x07, 0x07, 0xE0 };
+					CommandRequest = new byte[19];
+					CommandRequest[0] = 0x01;
+					CommandRequest[1] = 0x00;
+					CommandRequest[2] = 0x00;
+					CommandRequest[3] = 0x01;//00
+					CommandRequest[4] = 0x1E;//01
+					CommandRequest[5] = 0x0F;//02
+					CommandRequest[6] = 0x0B;//03
+					CommandRequest[7] = 0x18;//04
+					CommandRequest[8] = 0x08;//05
+					CommandRequest[9] = 0x7E;//06
+					CommandRequest[10] = 0x00;//07
+					CommandRequest[11] = 0x00;//08
+					CommandRequest[12] = 0x00;//09
+					CommandRequest[13] = 0x00;//10
+					CommandRequest[14] = 0x00;//11
+					CommandRequest[15] = 0x00;//12
+					CommandRequest[16] = 0x00;//13
+					CommandRequest[17] = 0x00;//14
+					CommandRequest[18] = 0x00;//15
+
+					this.Adapter.SendCommand(Char9A0A, CommandRequest);
+					break;
+				case Constants.StriivSyncHandlerSequence.FileLoadList:
+					Debug.WriteLine("Reading File Load List");
+					CommandRequest = new byte[] { 0x02, 0x01 };
 					this.Adapter.SendCommand(Char9A0A, CommandRequest);
 					break;
 				default:
@@ -134,24 +170,38 @@ namespace Motion.Core.SyncHandler
 		{
 			Debug.WriteLine("Receiving Response: " + Motion.Mobile.Utilities.Utils.ByteArrayToHexString(e.Data));
 
-			if (e.Data[0] == 0x87 || e.Data[0] == 0x88)
+			if (e.Data[0] == 0x88)
 			{
-				Debug.WriteLine("Receiving ack/activity streaming. Ignoring...");
+				Debug.WriteLine("Receiving ack. Ignoring...");
+			}
+			else if (e.Data[0] == 0x87)
+			{
+				Debug.WriteLine("Receiving activity streaming. Ignoring...");
 			}
 			else {
 
 				switch (this.Command)
 				{
-					case Constants.StriivSyncHandlerSequence.RegisterRead:
-						Debug.WriteLine("Receiving register read");
+					case Constants.StriivSyncHandlerSequence.DeviceInfo:
+						Debug.WriteLine("Receiving Device Info");
 						this.PacketsReceived.Add(e.Data);
 						if (this.PacketsReceived.Count >= 5)
 						{
+							this.ParseDeviceInfo(e.Data);
 							this.ProcessCommands();
 						}
 						break;
+					case Constants.StriivSyncHandlerSequence.RegisterRead:
+						Debug.WriteLine("Receiving register read");
+						this.ProcessCommands();
+						break;
 					case Constants.StriivSyncHandlerSequence.RegisterWrite:
 						Debug.WriteLine("Receiving register write time response");
+						this.ProcessCommands();
+						break;
+					case Constants.StriivSyncHandlerSequence.FileLoadList:
+						Debug.WriteLine("Receiving File Load List");
+						//this.ProcessCommands();
 						break;
 					default:
 						break;
@@ -175,8 +225,11 @@ namespace Motion.Core.SyncHandler
 
 			Char9A0A = GetServicesCharacteristic(Constants.CharacteristicsUUID._9A0A);
 			this.ProcessQeueue.Enqueue(Constants.StriivSyncHandlerSequence.EnableFE23);
-			this.ProcessQeueue.Enqueue(Constants.StriivSyncHandlerSequence.RegisterRead);
+			//this.ProcessQeueue.Enqueue(Constants.StriivSyncHandlerSequence.DeviceInfo);
 			//this.ProcessQeueue.Enqueue(Constants.StriivSyncHandlerSequence.RegisterWrite);
+			//this.ProcessQeueue.Enqueue(Constants.StriivSyncHandlerSequence.RegisterRead);
+			this.ProcessQeueue.Enqueue(Constants.StriivSyncHandlerSequence.FileLoadList);
+			//this.ProcessQeueue.Enqueue(Constants.StriivSyncHandlerSequence.DeviceInfo);
 
 			this.ProcessCommands();
 		}
@@ -207,6 +260,47 @@ namespace Motion.Core.SyncHandler
 		{
 			this.WebService = webservice;
 		}
+
+		private void ParseDeviceInfo(byte[] bytes)
+		{
+			List<byte> cleanData = new List<byte>();
+			byte streamingNumber = 0x00;
+			byte[] messageLength = new byte[3];
+
+			//Clean packets received - start
+			for (int i = 0; i < this.PacketsReceived.Count; i++)
+			{
+				byte[] indexBytes = this.PacketsReceived[i];
+
+				//first bit of first byte
+				int bit = ((indexBytes[0] & 0x80) > 1) ? 1 : 0;
+
+				//first packet
+				if (bit == 1)
+				{
+					streamingNumber = indexBytes[1];
+					messageLength[0] = indexBytes[2];
+					messageLength[1] = indexBytes[3];
+					messageLength[2] = indexBytes[4];
+					//Array.C
+				}
+				//succedding packets
+				else {
+				}
+			}
+			//Clean packets received - end
+		}
+
+		public bool ValidateActivationCode(string enteredCode)
+		{
+			throw new NotImplementedException();
+		}
+
+		public void SetUserInfo(UserInformation userInfo)
+		{
+			throw new NotImplementedException();
+		}
+
 	}
 }
 

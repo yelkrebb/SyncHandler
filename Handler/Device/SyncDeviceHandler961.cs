@@ -5,20 +5,29 @@ using System.Linq;
 using System.Threading.Tasks;
 using Motion.Core.Data.BleData;
 using Motion.Core.Data.BleData.Trio;
+using Motion.Core.Data.BleData.Trio.Others;
 using Motion.Core.Data.BleData.Trio.SettingsData;
+using Motion.Core.Data.BleData.Trio.StepsData;
+using Motion.Core.Data.WebServiceData.DeviceWebServices;
 using Motion.Core.WSHandler;
 using Motion.Mobile.Core.BLE;
 using Motion.Mobile.Utilities;
+using Motion.Core.Data.UserData;
+using Motion.Core.Data.WebServiceData;
 
 namespace Motion.Core.SyncHandler
 {
 	public class SyncDeviceHandler961 : ISyncDeviceHandler
 	{
+		public UserInformation UserInformationInstance { get; set; }
+
 		private static readonly object _synclock = new object();
 		private static SyncDeviceHandler961 Instance;
 
+
 		public event EventHandler IncrementProgressBar = delegate { };
 		public event EventHandler<SyncDoneEventArgs> SyncDone = delegate { };
+
 
 		private IAdapter Adapter;
 		private IDevice Device;
@@ -29,15 +38,37 @@ namespace Motion.Core.SyncHandler
 		private ICharacteristic ReadChar;
 
 		private TrioDeviceInformation TrioDeviceInformationInstance;
+
+
 		private UserSettings UserSettingsInstance;
+		//private Tallies TalliesInstance;
+		private DeviceStatus DeviceStatusInstance;
+		private StepsTableData StepsTableDataInstance;
+		private ClearEEPROM ClearEEPROMInstance;
+		private CompanySettings CompanySettingsInstance;
+		private DeviceSettings DeviceSettingsInstance;
+		private ExerciseSettings ExerciseSettingsInstance;
+		private SeizureSettings SeizureSettingsInstance;
+		private SensitivitySettings SensitivitySettingsInstance;
+		private DeviceMode DeviceModeInstance;
+		private SignatureSettings SignatureSettingsInstance;
+		private DisplayOnScreenData DisplayOnScreenInstance;
+
+
+		private ActivateDeviceWithMember ActivateDeviceWithMemberInstance;
+		private ActivateDeviceWithMemberResponse ActivateDeviceWithMemberResponseInstance;
+
 
 		private Queue<Constants.SyncHandlerSequence> ProcessQeueue = new Queue<Constants.SyncHandlerSequence>();
 		private Constants.SyncHandlerSequence Command;
 		private EventHandler<CharacteristicReadEventArgs> NotifyStateUpdated = null;
+		public event EventHandler<StatusEventArgs> FourDigitCodeChecked = delegate { };
 
 		private Constants.ScanType ScanType;
+		private BLEParsingStatus ParsingStatus;
 
 		private byte[] CommandRequest;
+		private byte[] ActivationCode;
 
 		//flag for progress increment eligibility
 		//value will only be true if device configuration is done 
@@ -60,6 +91,7 @@ namespace Motion.Core.SyncHandler
 					if (Instance == null)
 					{
 						Instance = new SyncDeviceHandler961();
+
 					}
 				}
 			}
@@ -84,15 +116,28 @@ namespace Motion.Core.SyncHandler
 			this.StartIncrementProgress = false;
 
 			TrioDeviceInformationInstance = new TrioDeviceInformation();
-			UserSettingsInstance = new UserSettings(TrioDeviceInformationInstance);
 
 			if (this.ScanType == Constants.ScanType.ACTIVATION)
 			{
+				Debug.WriteLine("SyncDeviceHandler961: Start activation...");
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.EnableFF07);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.EnableFF08);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadModel);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadSerial);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadFwVersion);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadBatteryLevel);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadManufacturer);
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteScreenDisplay);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ActivateDeviceWithMember);
+
+
+
+
 			}
 			else if (this.ScanType == Constants.ScanType.SYNCING)
 			{
-				Debug.WriteLine("SyncDeviceHandler961: Start syncing-...");
+				
+				Debug.WriteLine("SyncDeviceHandler961: Start syncing...");
 				//this.GetServicesCharacterisitic();
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.EnableFF07);
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.EnableFF08);
@@ -101,10 +146,16 @@ namespace Motion.Core.SyncHandler
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadFwVersion);
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadBatteryLevel);
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadManufacturer);
+
+
+
+				//this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadDeviceSettings);
 				//this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WsGetDeviceInfo);
+
+
 				//this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadTallies);
 				//this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadDeviceInformation);
-				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadUserSettings);
+				//this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadUserSettings);
 				//this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadDeviceStatus);
 				//this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadDeviceSettings);
 				//this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadStepsHeader);
@@ -161,8 +212,8 @@ namespace Motion.Core.SyncHandler
 					ReadChar = GetServicesCharacteristic(Constants.CharacteristicsUUID._2A24);
 					chr = await ReadChar.ReadAsync();
 					int num = 0;
-					Debug.WriteLine("Model: " + num);
 					int.TryParse(System.Text.Encoding.UTF8.GetString(chr.Value, 0, chr.Value.Length).Replace("PE", "").Replace("FT", ""), out num);
+					Debug.WriteLine("Model: " + num);
 					this.TrioDeviceInformationInstance.ModelNumber = num;
 					ProcessCommands();
 					break;
@@ -188,10 +239,13 @@ namespace Motion.Core.SyncHandler
 					break;
 				case Constants.SyncHandlerSequence.ReadManufacturer:
 					Debug.WriteLine("SyncDeviceHandler961: Reading manufacturer from characteristic.");
-					this.StartIncrementProgress = true;
 					ReadChar = GetServicesCharacteristic(Constants.CharacteristicsUUID._2A29);
 					chr = await ReadChar.ReadAsync();
 					Debug.WriteLine("Manufacturer: " + System.Text.Encoding.UTF8.GetString(chr.Value, 0, chr.Value.Length));
+					this.InitDataModelObjects();
+					this.Adapter.CommandResponse += ReceiveResponse;
+
+
 					ProcessCommands();
 					break;
 				case Constants.SyncHandlerSequence.ReadBatteryLevel:
@@ -215,24 +269,23 @@ namespace Motion.Core.SyncHandler
 					break;
 				case Constants.SyncHandlerSequence.ReadDeviceStatus:
 					Debug.WriteLine("SyncDeviceHandler961: Read Device Status");
-					CommandRequest = new byte[] { 0x1B, 0x13 };
+					CommandRequest = await DeviceStatusInstance.GetReadCommand();
 					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 				case Constants.SyncHandlerSequence.ReadDeviceSettings:
 					Debug.WriteLine("SyncDeviceHandler961: Read Device Settings");
-					CommandRequest = new byte[] { 0x1B, 0x17 };
+					CommandRequest = await DeviceSettingsInstance.GetReadCommand();
 					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 				case Constants.SyncHandlerSequence.ReadUserSettings:
 					Debug.WriteLine("SyncDeviceHandler961: Read User Settings");
-					//CommandRequest = new byte[] { 0x1B, 0x19 };
 					CommandRequest = await UserSettingsInstance.GetReadCommand();
 					Debug.WriteLine("Read User Settings: " + Motion.Mobile.Utilities.Utils.ByteArrayToHexString(CommandRequest));
 					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 				case Constants.SyncHandlerSequence.ReadStepsHeader:
 					Debug.WriteLine("SyncDeviceHandler961: Read Steps Header");
-					CommandRequest = new byte[] { 0x1B, 0x22};
+					CommandRequest = await StepsTableDataInstance.GetReadStepTableDataCommand();
 					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 				case Constants.SyncHandlerSequence.ReadSeizureTable:
@@ -240,7 +293,6 @@ namespace Motion.Core.SyncHandler
 					break;
 				case Constants.SyncHandlerSequence.ReadHourlySteps:
 					Debug.WriteLine("SyncDeviceHandler961: Read Steps Header");
-					//CommandRequest = new byte[] { 0x1B, 0x24, 0x };
 					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 				case Constants.SyncHandlerSequence.ReadCurrentHour:
@@ -261,6 +313,10 @@ namespace Motion.Core.SyncHandler
 					break;
 				case Constants.SyncHandlerSequence.WriteDeviceSettings:
 					Debug.WriteLine("SyncDeviceHandler961: Writing device settings");
+
+					String serverTime = ActivateDeviceWithMemberResponseInstance.ServerDateTime;
+					//CommandRequest = await DeviceSettingsInstance.GetWriteCommand();
+					//this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 				case Constants.SyncHandlerSequence.WriteUserSettings:
 					Debug.WriteLine("SyncDeviceHandler961: Writing user settings");
@@ -288,14 +344,53 @@ namespace Motion.Core.SyncHandler
 					break;
 				case Constants.SyncHandlerSequence.WriteScreenDisplay:
 					Debug.WriteLine("SyncDeviceHandler961: Writing screen display");
+					this.ActivationCode = Utils.GetRandomDigits(4); //4 random digits to be generated
+					// For testing purposes only
+					this.ActivationCode[0] = 0x31;
+					this.ActivationCode[1] = 0x32;
+					this.ActivationCode[2] = 0x33;
+					this.ActivationCode[3] = 0x34;
+					// For testing purposes only
+					Debug.WriteLine("Random digits: " + Motion.Mobile.Utilities.Utils.ByteArrayToHexString(this.ActivationCode));
+					CommandRequest = await DisplayOnScreenInstance.GetWriteCommand(this.ActivationCode);
+					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 				case Constants.SyncHandlerSequence.ClearEEProm:
 					Debug.WriteLine("SyncDeviceHandler961: Clear eeprom");
+					ClearEEPROMInstance.ExerciseData = true;
+					ClearEEPROMInstance.SettingsData = false;
+					ClearEEPROMInstance.SurveyQuestions = true;
+					ClearEEPROMInstance.Tallies = true;
+					ClearEEPROMInstance.MedicineAlarm = true;
+					ClearEEPROMInstance.MotivationalQuotes = true;
+					CommandRequest = await ClearEEPROMInstance.GetWriteCommand();
+					this.Adapter.SendCommand(Ff07Char, CommandRequest);
+					break;
+
+				case Constants.SyncHandlerSequence.ActivateDeviceWithMember:
+					Debug.WriteLine("SyncDeviceHandler961: WS Activate Device With Member");
+					ActivateDeviceWithMemberInstance.request.TrackerModel = TrioDeviceInformationInstance.ModelNumber;
+					ActivateDeviceWithMemberInstance.request.TrackerSerialNumber = TrioDeviceInformationInstance.SerialNumber;
+					ActivateDeviceWithMemberInstance.request.TrackerBtAdd = "";
+					ActivateDeviceWithMemberInstance.request.ApplicationID = 14487;
+					ActivateDeviceWithMemberInstance.request.MemberDermID = 66525;
+					ActivateDeviceWithMemberInstance.request.TrackerFirmwareVersion = 4.3f;
+					WebServiceRequestStatus status = await ActivateDeviceWithMemberInstance.PostRequest();
+
+					if (status == WebServiceRequestStatus.SUCCESS)
+					{
+						Debug.WriteLine("Success");
+						ActivateDeviceWithMemberResponseInstance = ActivateDeviceWithMemberInstance.response;
+						this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteDeviceSettings);
+						ProcessCommands();
+					}
+					//this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 				case Constants.SyncHandlerSequence.WsGetDeviceInfo:
 					Debug.WriteLine("SyncDeviceHandler961: WS Request GetDeviceInfo");
+
 					//to be replaced - start
-					Dictionary<String, object> parameter = new Dictionary<String, object>();
+					/*Dictionary<String, object> parameter = new Dictionary<String, object>();
 					parameter.Add("serno", "9999999894");
 					parameter.Add("fwver", "4.3");
 					parameter.Add("mdl", "961");
@@ -313,13 +408,17 @@ namespace Motion.Core.SyncHandler
 					{
 						Debug.WriteLine("Device is paired");
 						this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadTallies);
+						this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadDeviceStatus);
+						this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadUserSettings);
+						this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadStepsHeader);
 						this.ProcessCommands();
 					}
 					else {
 						Debug.WriteLine("Device is not paired");
 						this.Adapter.DisconnectDevice(this.Device);
-					}
-
+					}*/
+					// set to true once getdevice info has succeeded
+					//this.StartIncrementProgress = true;
 					break;
 				case Constants.SyncHandlerSequence.WsUploadTallies:
 					break;
@@ -371,7 +470,7 @@ namespace Motion.Core.SyncHandler
 								Debug.WriteLine("Subscribing notifystateupdate!");
 								NotifyStateUpdated = new EventHandler<CharacteristicReadEventArgs>(NotifyStateUpdateDone);
 								characterisitic.NotificationStateValueUpdated += NotifyStateUpdateDone;
-							}
+															}
 						}
 						break;
 					}
@@ -380,6 +479,7 @@ namespace Motion.Core.SyncHandler
 
 			return characterisitic;
 		}
+
 
 		public void NotifyStateUpdateDone(object sender, CharacteristicReadEventArgs e)
 		{
@@ -391,12 +491,11 @@ namespace Motion.Core.SyncHandler
 					break;
 				case Constants.SyncHandlerSequence.EnableFF08:
 					Debug.WriteLine("Done enabling FF08");
-					this.Adapter.CommandResponse += ReceiveResponse;
 					break;
 				default:
 					Debug.WriteLine("Unknown response!");
 					break;
-											
+
 			}
 			this.ProcessCommands();
 		}
@@ -411,6 +510,19 @@ namespace Motion.Core.SyncHandler
 			}
 			switch (this.Command)
 			{
+				case Constants.SyncHandlerSequence.WriteScreenDisplay:
+					this.ParsingStatus = await DisplayOnScreenInstance.ParseData(e.Data);
+					// For testing purposes only
+					bool success = ValidateActivationCode("1234");
+					if (success)
+					{
+						StatusEventArgs args = new StatusEventArgs();
+						args.isEqual = success;
+						this.FourDigitCodeChecked(this,args);
+						this.ProcessCommands();
+					}
+						
+					break;
 				case Constants.SyncHandlerSequence.ReadTallies:
 					Debug.WriteLine("Receiving device tallies");
 					this.PacketsReceived.Add(e.Data);
@@ -430,13 +542,21 @@ namespace Motion.Core.SyncHandler
 					this.ProcessCommands();
 					break;
 				case Constants.SyncHandlerSequence.ReadDeviceSettings:
-					Debug.WriteLine("Receving device settings");
+					Debug.WriteLine("Receiving device settings");
+					this.ParsingStatus = await DeviceSettingsInstance.ParseData(e.Data);
+					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
+					{
+						this.ProcessCommands();
+					}
+					else {
+						this.Adapter.DisconnectDevice(this.Device);
+					}
 					this.ProcessCommands();
 					break;
 				case Constants.SyncHandlerSequence.ReadUserSettings:
 					Debug.WriteLine("Receiving user settings: ");
-					BLEParsingStatus status = await UserSettingsInstance.ParseData(e.Data);
-					if (status == BLEParsingStatus.SUCCESS)
+					this.ParsingStatus = await UserSettingsInstance.ParseData(e.Data);
+					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
 					{
 						Debug.WriteLine("User RMR: " + UserSettingsInstance.RestMetabolicRate);
 						this.ProcessCommands();
@@ -451,8 +571,24 @@ namespace Motion.Core.SyncHandler
 					if (Utils.LastPacketReceived(2, e.Data))
 					{
 						Debug.WriteLine("Last packet received...");
-						//Process Data Here...
-						this.ProcessCommands();
+						byte[] data = new byte[20 * this.PacketsReceived.Count];
+						for (int i = 0; i < this.PacketsReceived.Count; i++)
+						{
+							Array.Copy(this.PacketsReceived.ElementAt(i).ToArray(), Constants.INDEX_ZERO, data, (i * Constants.PACKET_BYTE_SIZE), Constants.PACKET_BYTE_SIZE);
+						}
+						this.ParsingStatus = await StepsTableDataInstance.ParseData(data);
+
+						if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
+						{
+							for (int i = 0; i < StepsTableDataInstance.stepsDataTable.Count; i++)
+							{
+								StepsTableParameters stp = StepsTableDataInstance.stepsDataTable.ElementAt(i);
+								Debug.WriteLine("Steps Date: " + stp.dbYear + " " + stp.dbMonth + " " + stp.dbDay + " " + stp.dbHourNumber);
+							}
+						}
+						else {
+							this.Adapter.DisconnectDevice(this.Device);
+						}
 					}
 					break;
 				case Constants.SyncHandlerSequence.ReadSeizureTable:
@@ -515,9 +651,18 @@ namespace Motion.Core.SyncHandler
 				case Constants.SyncHandlerSequence.WriteDeviceStatus:
 					break;
 				case Constants.SyncHandlerSequence.ClearEEProm:
+					Debug.WriteLine("Receiving clear eeprom: ");
+					this.ParsingStatus = await ClearEEPROMInstance.ParseData(e.Data);
+					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
+					{
+						this.ProcessCommands();
+					}
+					else {
+						this.Adapter.DisconnectDevice(this.Device);
+					}
 					break;
 				default:
-					Debug.WriteLine("Invalid response received.");
+					Debug.WriteLine("Invalid response received: " + this.Command.ToString());
 					break;
 			}
 		}
@@ -530,14 +675,58 @@ namespace Motion.Core.SyncHandler
 
 		public void StartWriteSettings()
 		{
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteDeviceSettings);
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ClearEEProm);
 			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteUserSettings);
-			//Other settings to be queued.
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteExerciseSettings);
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteCompanySettings);
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteSignatureSettings);
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteSeizureSettings);
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteScreenDisplay);
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteDeviceSensitivity);
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteDeviceStatus);
 		}
 
 		public void SetWebService(IWebServicesWrapper webservice)
 		{
 			this.WebService = webservice;
 		}
+
+		private void InitDataModelObjects()
+		{
+			UserSettingsInstance = new UserSettings(TrioDeviceInformationInstance);
+			DeviceStatusInstance = new DeviceStatus(TrioDeviceInformationInstance);
+			//StepsTableDataInstance = new StepsTableData(TrioDeviceInformationInstance);
+			ClearEEPROMInstance = new ClearEEPROM(TrioDeviceInformationInstance);
+			CompanySettingsInstance = new CompanySettings(TrioDeviceInformationInstance);
+			DeviceSettingsInstance = new DeviceSettings(TrioDeviceInformationInstance);
+			ExerciseSettingsInstance = new ExerciseSettings(TrioDeviceInformationInstance);
+			SeizureSettingsInstance = new SeizureSettings(TrioDeviceInformationInstance);
+			SensitivitySettingsInstance = new SensitivitySettings(TrioDeviceInformationInstance);
+			DeviceModeInstance = new DeviceMode(TrioDeviceInformationInstance);
+			SignatureSettingsInstance = new SignatureSettings(TrioDeviceInformationInstance);
+			DisplayOnScreenInstance = new DisplayOnScreenData(TrioDeviceInformationInstance);
+			ActivateDeviceWithMemberInstance = new ActivateDeviceWithMember(TrioDeviceInformationInstance);
+		}
+
+		public bool ValidateActivationCode(string enteredCode)
+		{
+			/*String strGenerated = "";
+			for (int i = 0; i < this.ActivationCode.Length; i++)
+			{
+				string temp = Convert.ToString(this.ActivationCode[i]);
+				strGenerated.Insert(i,temp );
+			}*/
+			String strGenerated =  System.Text.Encoding.UTF8.GetString(this.ActivationCode
+			                                                           , 0, this.ActivationCode.Length);
+			return Utils.ValidateActivationCode(strGenerated, enteredCode);
+		}
+
+		public void SetUserInfo(UserInformation userInfo)
+		{
+			UserInformationInstance = userInfo;
+		}
+
 	}
 }
 
