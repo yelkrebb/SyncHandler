@@ -53,10 +53,12 @@ namespace Motion.Core.SyncHandler
 		private DeviceMode DeviceModeInstance;
 		private SignatureSettings SignatureSettingsInstance;
 		private DisplayOnScreenData DisplayOnScreenInstance;
+		private FirmwareDisplaySequenceData FirmwareDisplaySequenceInstance;
 
 
-		private ActivateDeviceWithMember ActivateDeviceWithMemberInstance;
-		private ActivateDeviceWithMemberResponse ActivateDeviceWithMemberResponseInstance;
+		private ActivateDeviceWithMember WSActivateDeviceWithMemberInstance;
+		private NotifySettingsUpdate WSNotifySettingsUpdateInstance;
+		private ActivateDeviceWithMemberResponse WSActivateDeviceWithMemberResponseInstance;
 
 
 		private Queue<Constants.SyncHandlerSequence> ProcessQeueue = new Queue<Constants.SyncHandlerSequence>();
@@ -128,10 +130,18 @@ namespace Motion.Core.SyncHandler
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadBatteryLevel);
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadManufacturer);
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteScreenDisplay);
-				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ActivateDeviceWithMember);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WsActivateDeviceWithMember);
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteDeviceSettings);
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ClearEEProm);
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteUserSettings);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteExerciseSettings);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteCompanySettings);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteSignatureSettings);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteSeizureSettings);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteScreenFlow);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteDeviceSensitivity);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteDeviceStatus);
+				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteDeviceMode);
 
 
 
@@ -325,25 +335,47 @@ namespace Motion.Core.SyncHandler
 					break;
 				case Constants.SyncHandlerSequence.WriteExerciseSettings:
 					Debug.WriteLine("SyncDeviceHandler961: Writing exercise settings");
+					CommandRequest = await ExerciseSettingsInstance.GetWriteCommand();
+					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 				case Constants.SyncHandlerSequence.WriteCompanySettings:
 					Debug.WriteLine("SyncDeviceHandler961: Writing company settings");
+					CommandRequest = await CompanySettingsInstance.GetWriteCommand();
+					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 				case Constants.SyncHandlerSequence.WriteSignatureSettings:
 					Debug.WriteLine("SyncDeviceHandler961: Writing signature settings");
+					CommandRequest = await SignatureSettingsInstance.GetWriteCommand();
+					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 				case Constants.SyncHandlerSequence.WriteSeizureSettings:
 					Debug.WriteLine("SyncDeviceHandler961: Writing seizure settings");
+					CommandRequest = await SeizureSettingsInstance.GetWriteCommand();
+					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 		          	break;
 				case Constants.SyncHandlerSequence.WriteScreenFlow:
 					Debug.WriteLine("SyncDeviceHandler961: Writing screenflow settings");
+					CommandRequest = await FirmwareDisplaySequenceInstance.GetWriteCommand(WSActivateDeviceWithMemberResponseInstance.ScreenFlow);
+					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 				case Constants.SyncHandlerSequence.WriteDeviceSensitivity:
 					Debug.WriteLine("SyncDeviceHandler961: Writing device sensitivity settings");
+					SensitivitySettingsInstance.SensitivityOld = WSActivateDeviceWithMemberResponseInstance.TrackerSensitivity;
+					CommandRequest = await SensitivitySettingsInstance.GetWriteCommand();
+					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 				case Constants.SyncHandlerSequence.WriteDeviceStatus:
 					Debug.WriteLine("SyncDeviceHandler961: Writing device status settings");
+					DeviceStatusInstance.PairingStatus = 1;
+					CommandRequest = await DeviceStatusInstance.GetWriteCommand();
+					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
+				case Constants.SyncHandlerSequence.WriteDeviceMode:
+					Debug.WriteLine("SyncDeviceHandler961: Writing device status settings");
+					DeviceModeInstance.EnableBroadcastAlways = WSActivateDeviceWithMemberResponseInstance.AdvertiseMode;
+					CommandRequest = await DeviceModeInstance.GetWriteCommand();
+					this.Adapter.SendCommand(Ff07Char, CommandRequest);
+					break;	
 				case Constants.SyncHandlerSequence.WriteScreenDisplay:
 					Debug.WriteLine("SyncDeviceHandler961: Writing screen display");
 					this.ActivationCode = Utils.GetRandomDigits(4); //4 random digits to be generated
@@ -369,26 +401,32 @@ namespace Motion.Core.SyncHandler
 					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 
-				case Constants.SyncHandlerSequence.ActivateDeviceWithMember:
+				case Constants.SyncHandlerSequence.WsActivateDeviceWithMember:
 					Debug.WriteLine("SyncDeviceHandler961: WS Activate Device With Member");
-					ActivateDeviceWithMemberInstance.request.TrackerModel = TrioDeviceInformationInstance.ModelNumber;
-					ActivateDeviceWithMemberInstance.request.TrackerSerialNumber = TrioDeviceInformationInstance.SerialNumber;
-					ActivateDeviceWithMemberInstance.request.TrackerBtAdd = "";
-					ActivateDeviceWithMemberInstance.request.ApplicationID = 14487;
-					ActivateDeviceWithMemberInstance.request.MemberDermID = 66525;
-					ActivateDeviceWithMemberInstance.request.TrackerFirmwareVersion = 4.3f;
-					WebServiceRequestStatus status = await ActivateDeviceWithMemberInstance.PostRequest();
+					WSActivateDeviceWithMemberInstance.request.TrackerModel = TrioDeviceInformationInstance.ModelNumber;
+					WSActivateDeviceWithMemberInstance.request.TrackerSerialNumber = TrioDeviceInformationInstance.SerialNumber;
+					WSActivateDeviceWithMemberInstance.request.TrackerBtAdd = "";
+					WSActivateDeviceWithMemberInstance.request.ApplicationID = 14487;
+					WSActivateDeviceWithMemberInstance.request.MemberDermID = 66525;
+					WSActivateDeviceWithMemberInstance.request.TrackerFirmwareVersion = 4.3f;
+					WebServiceRequestStatus status = await WSActivateDeviceWithMemberInstance.PostRequest();
 
 					if (status == WebServiceRequestStatus.SUCCESS)
 					{
 						Debug.WriteLine("Success");
-						ActivateDeviceWithMemberResponseInstance = ActivateDeviceWithMemberInstance.response;
-						if (ActivateDeviceWithMemberResponseInstance != null)
+						WSActivateDeviceWithMemberResponseInstance = WSActivateDeviceWithMemberInstance.response;
+						if (WSActivateDeviceWithMemberResponseInstance != null)
+						{
 							this.SetSettingsFromWebServer();
+							ProcessCommands();
+						}
 						else
-							    
-							Debug.WriteLine("ActivateDeviceWithMemeber Response is null");
-						ProcessCommands();
+						{
+							WSActivateDeviceWithMemberResponseInstance = WSActivateDeviceWithMemberInstance.response;
+							Debug.WriteLine("ActivateDeviceWithMemeber Response is " + WSActivateDeviceWithMemberResponseInstance.ResponseMessage);
+							this.Adapter.DisconnectDevice(this.Device);
+						}
+
 					}
 					//this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
@@ -439,6 +477,24 @@ namespace Motion.Core.SyncHandler
 				case Constants.SyncHandlerSequence.WsUploadSeizure:
 					break;
 				case Constants.SyncHandlerSequence.WsSendNotifySettingsUpdate:
+					Debug.WriteLine("SyncDeviceHandler961: WS Notify Settings Update");
+
+					DateTime currentDateTime = DateTime.Now;
+
+					long dateTimeInUnix = (long)Motion.Mobile.Utilities.Utils.DateTimeToUnixTimestamp(currentDateTime);
+
+					WSNotifySettingsUpdateInstance.request.MemberID = 56375;
+					WSNotifySettingsUpdateInstance.request.MemberDeviceID = 72273;
+					WSNotifySettingsUpdateInstance.request.LastSyncSettingDateTime = dateTimeInUnix;
+					WSNotifySettingsUpdateInstance.request.TrackerModel = TrioDeviceInformationInstance.ModelNumber;
+					WSNotifySettingsUpdateInstance.request.UpdateFlag = 3327;
+					WSNotifySettingsUpdateInstance.request.SettingType = 3327;
+					WSNotifySettingsUpdateInstance.request.DevicePairingStatus = TrioDeviceInformationInstance.
+					WSNotifySettingsUpdateInstance.request.DeviceDateTime = null;
+					WSNotifySettingsUpdateInstance.request.BatteryLevel = TrioDeviceInformationInstance.BatteryLevel;
+
+
+					WebServiceRequestStatus status = await WSActivateDeviceWithMemberInstance.PostRequest();
 					break;
 				default:
 					Debug.WriteLine("SyncDeviceHandler961: Unable to identify command.");
@@ -552,12 +608,13 @@ namespace Motion.Core.SyncHandler
 					this.ParsingStatus = await DeviceSettingsInstance.ParseData(e.Data);
 					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
 					{
+						if (this.ScanType == Constants.ScanType.ACTIVATION)
+							this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WsSendNotifySettingsUpdate);
 						this.ProcessCommands();
 					}
 					else {
 						this.Adapter.DisconnectDevice(this.Device);
 					}
-					this.ProcessCommands();
 					break;
 				case Constants.SyncHandlerSequence.ReadUserSettings:
 					Debug.WriteLine("Receiving user settings: ");
@@ -639,6 +696,7 @@ namespace Motion.Core.SyncHandler
 				case Constants.SyncHandlerSequence.WriteStepsHeader:
 					break;
 				case Constants.SyncHandlerSequence.WriteDeviceSettings:
+					Debug.WriteLine("Receiving Write Device Settings response.");
 					this.ParsingStatus = await DeviceSettingsInstance.ParseData(e.Data);
 					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
 					{
@@ -646,25 +704,75 @@ namespace Motion.Core.SyncHandler
 					}
 					break;
 				case Constants.SyncHandlerSequence.WriteUserSettings:
+					Debug.WriteLine("Receiving Write User Settings response.");
 					this.ParsingStatus = await UserSettingsInstance.ParseData(e.Data);
 					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
 					{
 						this.ProcessCommands();
 					}
+
 					break;
 				case Constants.SyncHandlerSequence.WriteExerciseSettings:
+					Debug.WriteLine("Receiving Write Exercise Settings response.");
+					this.ParsingStatus = await ExerciseSettingsInstance.ParseData(e.Data);
+					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
+					{
+						this.ProcessCommands();
+					}
 					break;
 				case Constants.SyncHandlerSequence.WriteCompanySettings:
+					Debug.WriteLine("Receiving Write Company Settings response.");
+					this.ParsingStatus = await CompanySettingsInstance.ParseData(e.Data);
+					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
+					{
+						this.ProcessCommands();
+					}
 					break;
 				case Constants.SyncHandlerSequence.WriteSignatureSettings:
+					Debug.WriteLine("Receiving Write Signature Settings response.");
+					this.ParsingStatus = await SignatureSettingsInstance.ParseData(e.Data);
+					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
+					{
+						this.ProcessCommands();
+					}
 					break;
 				case Constants.SyncHandlerSequence.WriteSeizureSettings:
+					Debug.WriteLine("Receiving Write Seizure Settings response.");
+					this.ParsingStatus = await SeizureSettingsInstance.ParseData(e.Data);
+					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
+					{
+						this.ProcessCommands();
+					}
 					break;
 				case Constants.SyncHandlerSequence.WriteScreenFlow:
+					this.ParsingStatus = await FirmwareDisplaySequenceInstance.ParseData(e.Data);
+					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
+					{
+						this.ProcessCommands();
+					}
 					break;
 				case Constants.SyncHandlerSequence.WriteDeviceSensitivity:
+					this.ParsingStatus = await SensitivitySettingsInstance.ParseData(e.Data);
+					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
+					{
+						this.ProcessCommands();
+					}
 					break;
 				case Constants.SyncHandlerSequence.WriteDeviceStatus:
+					this.ParsingStatus = await DeviceStatusInstance.ParseData(e.Data);
+					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
+					{
+						this.ProcessCommands();
+					}
+					break;
+
+				case Constants.SyncHandlerSequence.WriteDeviceMode:
+					this.ParsingStatus = await DeviceStatusInstance.ParseData(e.Data);
+					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
+					{
+						this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadDeviceSettings);
+						this.ProcessCommands();
+					}
 					break;
 				case Constants.SyncHandlerSequence.ClearEEProm:
 					Debug.WriteLine("Receiving clear eeprom: ");
@@ -701,6 +809,7 @@ namespace Motion.Core.SyncHandler
 			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteScreenDisplay);
 			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteDeviceSensitivity);
 			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteDeviceStatus);
+
 		}
 
 		public void SetWebService(IWebServicesWrapper webservice)
@@ -722,7 +831,9 @@ namespace Motion.Core.SyncHandler
 			DeviceModeInstance = new DeviceMode(TrioDeviceInformationInstance);
 			SignatureSettingsInstance = new SignatureSettings(TrioDeviceInformationInstance);
 			DisplayOnScreenInstance = new DisplayOnScreenData(TrioDeviceInformationInstance);
-			ActivateDeviceWithMemberInstance = new ActivateDeviceWithMember(TrioDeviceInformationInstance);
+			WSActivateDeviceWithMemberInstance = new ActivateDeviceWithMember(TrioDeviceInformationInstance);
+			FirmwareDisplaySequenceInstance = new FirmwareDisplaySequenceData(TrioDeviceInformationInstance);
+			WSNotifySettingsUpdateInstance = new NotifySettingsUpdate();
 		}
 
 		public bool ValidateActivationCode(string enteredCode)
@@ -802,6 +913,8 @@ namespace Motion.Core.SyncHandler
 			SeizureSettingsInstance.SeizureSamplingFrequency = ActivateDeviceWithMemberResponseInstance.seizureSettings.SeizureSamplingFrequency;
 			SeizureSettingsInstance.SeizureNumberOfRecords = ActivateDeviceWithMemberResponseInstance.seizureSettings.SeizureNumberOfRecords;
 			SeizureSettingsInstance.SeizureSamplingTime = ActivateDeviceWithMemberResponseInstance.seizureSettings.SeizureSamplingTime;
+
+
 
 		}
 	}
