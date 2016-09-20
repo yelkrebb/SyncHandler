@@ -3,6 +3,36 @@ namespace Motion.Core.SyncHandler
 {
 	public class Utils
 	{
+		//TRIO SETTINGS UPDATE FLAG BIT LOCATION
+		public const int CLEAR_EX_BIT_LOC = 0;
+		public const int USER_SETTINGS_BIT_LOC = 1;
+		public const int DEVICE_SETTINGS_BIT_LOC = 2;
+		public const int EXERCISE_SETTINGS_BIT_LOC = 3;
+		public const int COMPANY_SETTINGS_BIT_LOC = 4;
+		public const int SIGNATURE_SETTINGS_BIT_LOC = 5;
+		public const int SEIZURE_SETTINGS_BIT_LOC = 6;
+		public const int SCREEN_SETTINGS_BIT_LOC = 7;
+		public const int SENSITIVITY_SETTINGS_BIT_LOC = 8;
+		public const int DEVICE_PAIRING_STAT_BIT_LOC = 9;
+		public const int MESSAGE_SETTINGS_BIT_LOC = 10;
+		public const int CLEAR_MESSAGES_SETTINGS_BIT_LOC = 11;
+		public const int STEP_COUNTING_PARAM_SETTINGS_BIT_LOC = 12;
+
+		//TRIO SETTINGS UPDATE FLAGS
+		public const int CLEAR_EX = 0x01;
+		public const int USER_SETTINGS = 0x02;
+		public const int DEVICE_SETTINGS = 0x04;
+		public const int EXERCISE_SETTINGS = 0x08;
+		public const int COMPANY_SETTINGS = 0x10;
+		public const int SIGNATURE_SETTINGS = 0x20;
+		public const int SEIZURE_SETTINGS = 0x40;
+		public const int SCREEN_SETTINGS = 0x80;
+		public const int SENSITIVITY_SETTINGS = 0x100;
+		public const int PAIRING_SETTINGS = 0x200;
+		public const int MESSAGE_SETTINGS = 0x400;
+		public const int CLEAR_MESSAGES_SETTINGS = 0x800;
+		public const int STEP_COUNTING_PARAM_SETTINGS = 0x1000;
+
 		private static Random random;
 		public Utils()
 		{
