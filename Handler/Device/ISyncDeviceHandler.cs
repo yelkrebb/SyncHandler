@@ -3,6 +3,7 @@ using Motion.Core.WSHandler;
 using Motion.Mobile.Core.BLE;
 using Motion.Mobile.Utilities;
 using Motion.Core.Data.UserData;
+using Motion.Core.Data.AppData;
 
 namespace Motion.Core.SyncHandler
 {
@@ -11,6 +12,9 @@ namespace Motion.Core.SyncHandler
 
 		event EventHandler IncrementProgressBar;
 		event EventHandler<SyncDoneEventArgs> SyncDone;
+		event EventHandler<EventArgs> SyncStarted;
+		event EventHandler<EventArgs> ValidationCodeDisplayed;
+		event EventHandler<StatusEventArgs> CodeValidated;
 
 
 		void SetAdapter(IAdapter adapter);
@@ -18,6 +22,10 @@ namespace Motion.Core.SyncHandler
 		void SetDevice(IDevice device);
 
 		void SetWebService(IWebServicesWrapper webservice);
+
+		void SetUserInformation(UserInformation userInfo);
+
+		void SetApplicationInformation(ApplicationInfo appInfo);
 
 		void StartSync(Constants.ScanType scanType);
 
@@ -31,11 +39,9 @@ namespace Motion.Core.SyncHandler
 
 		void ProcessCommands();
 
-		bool ValidateActivationCode(String enteredCode);
+		void ValidateActivationCode(String enteredCode);
 
 		void CleanUp();
-
-		void SetUserInfo(UserInformation userInfo);
 
 	}
 }

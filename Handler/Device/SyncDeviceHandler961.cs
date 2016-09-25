@@ -27,7 +27,8 @@ namespace Motion.Core.SyncHandler
 {
 	public class SyncDeviceHandler961 : ISyncDeviceHandler
 	{
-		public UserInformation UserInformationInstance { get; set; }
+		private UserInformation UserInformationInstance { get; set; }
+		private ApplicationInfo ApplicationInfoInstance { get; set; }
 
 		private static readonly object _synclock = new object();
 		private static SyncDeviceHandler961 Instance;
@@ -35,6 +36,11 @@ namespace Motion.Core.SyncHandler
 
 		public event EventHandler IncrementProgressBar = delegate { };
 		public event EventHandler<SyncDoneEventArgs> SyncDone = delegate { };
+		public event EventHandler<EventArgs> SyncStarted = delegate { };
+		public event EventHandler<EventArgs> ValidationCodeDisplayed = delegate { }; 
+		public event EventHandler<StatusEventArgs> CodeValidated = delegate { };
+
+
 
 		Timer timerForDevice,timerForServer;
 		TimerCallback timerCallBack;
@@ -79,12 +85,14 @@ namespace Motion.Core.SyncHandler
 		private ActivateDeviceWithMember WSActivateDeviceWithMemberInstance;
 		private NotifySettingsUpdate WSNotifySettingsUpdateInstance;
 		private GetDeviceInformation WSGetDeviceInformationInstance;
-		private UploadTalliesData UploadTalliesDataInstance;
+		private UploadTalliesData WSUploadTalliesDataInstance;
 		private UploadStepsData WSUploadStepsDataInstance;
 		private UploadSignatureData WSUploadSignatureDataInstance;
 		private UploadSeizureData WSUploadSeiureDataInstance;
 		private UnpairMemberDevice WSUnpairMemberDeviceInstance;
 		private UploadCommandResponse WSUploadCommandResponseInstance;
+		private SendApplicationInformation WSSendAppInfoInstance;
+
 
 		private ApplicationUpdateSettings AppUpdateSettingsInstance;
 		private FirmwareUpdateInfo FirmwareUpdateInfoInstance;
@@ -95,7 +103,7 @@ namespace Motion.Core.SyncHandler
 		private Queue<Constants.SyncHandlerSequence> ProcessQeueue = new Queue<Constants.SyncHandlerSequence>();
 		private Constants.SyncHandlerSequence Command;
 		private EventHandler<CharacteristicReadEventArgs> NotifyStateUpdated = null;
-		public event EventHandler<StatusEventArgs> FourDigitCodeChecked = delegate { };
+
 
 		private Constants.ScanType ScanType;
 		private BLEParsingStatus ParsingStatus;
@@ -125,6 +133,7 @@ namespace Motion.Core.SyncHandler
 		private bool isUnFlaggingTableHeaderDueToTimeChange;
 		private bool clearMessagesOnly;
 		private bool isResettingTrio;
+		private bool isValidateAppInfo;
 
 
 
@@ -140,7 +149,12 @@ namespace Motion.Core.SyncHandler
 
 		private SyncDeviceHandler961()
 		{
+			this.SignatureToBeUploadedTableList = new List<StepsTableParameters>();
+			this.SeizureToBeUploadedList = new List<SeizureBlockInfo>();
+			AppUpdateSettingsInstance = new ApplicationUpdateSettings();
 			this.TimeChangeTableDataList = new List<StepsTableParameters>();
+			TrioDeviceInformationInstance = new TrioDeviceInformation();
+			this.InitDataModelObjects();
 		}
 
 		public static SyncDeviceHandler961 GetInstance()
@@ -169,6 +183,7 @@ namespace Motion.Core.SyncHandler
 			this.Device = null;
 			this.StartIncrementProgress = false;
 
+
 			if (this.timerForDevice != null)
 			{
 				this.timerForDevice.Cancel();
@@ -184,18 +199,22 @@ namespace Motion.Core.SyncHandler
 
 		public void StartSync(Constants.ScanType scanType)
 		{
+			
 			this.ScanType = scanType;
 			this.ProcessQeueue.Clear();
 			this.StartIncrementProgress = false;
 			this.isReadingCurrentHour = false;
 			this.isUnFlaggingTableHeaderDueToTimeChange = false;
 			this.clearMessagesOnly = false;
+			this.isValidateAppInfo = false;
 
-			TrioDeviceInformationInstance = new TrioDeviceInformation();
 
+			this.SyncStarted(this, new EventArgs());
 			if (this.ScanType == Constants.ScanType.ACTIVATION)
 			{
+				
 				Debug.WriteLine("SyncDeviceHandler961: Start activation...");
+
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.EnableFF07);
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.EnableFF08);
 				this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadModel);
@@ -338,7 +357,6 @@ namespace Motion.Core.SyncHandler
 					ReadChar = GetServicesCharacteristic(Constants.CharacteristicsUUID._2A29);
 					chr = await ReadChar.ReadAsync();
 					Debug.WriteLine("Manufacturer: " + System.Text.Encoding.UTF8.GetString(chr.Value, 0, chr.Value.Length));
-					this.InitDataModelObjects();
 					this.Adapter.CommandResponse += ReceiveResponse;
 					//this.isGettingDeviceInformation = false;
 					//if (this.ScanType == Constants.ScanType.SYNCING)
@@ -480,7 +498,7 @@ namespace Motion.Core.SyncHandler
 					this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
 				case Constants.SyncHandlerSequence.WriteDeviceMode:
-					Debug.WriteLine("SyncDeviceHandler961: Writing device status settings");
+					Debug.WriteLine("SyncDeviceHandler961: Writing device mode settings");
 					DeviceModeInstance.EnableBroadcastAlways = DeviceDataInstance.AdvertiseMode;
 					CommandRequest = await DeviceModeInstance.GetWriteCommand();
 					this.Adapter.SendCommand(Ff07Char, CommandRequest);
@@ -515,9 +533,9 @@ namespace Motion.Core.SyncHandler
 					WSActivateDeviceWithMemberInstance.request.TrackerModel = TrioDeviceInformationInstance.ModelNumber;
 					WSActivateDeviceWithMemberInstance.request.TrackerSerialNumber = TrioDeviceInformationInstance.SerialNumber;
 					WSActivateDeviceWithMemberInstance.request.TrackerBtAdd = "";
-					WSActivateDeviceWithMemberInstance.request.ApplicationID = 14487;
-					WSActivateDeviceWithMemberInstance.request.MemberDermID = 66525;
-					WSActivateDeviceWithMemberInstance.request.TrackerFirmwareVersion = 4.3f;
+					WSActivateDeviceWithMemberInstance.request.ApplicationID = UserInformationInstance.ApplicationID;
+					WSActivateDeviceWithMemberInstance.request.MemberDermID = UserInformationInstance.MemberID;
+					WSActivateDeviceWithMemberInstance.request.TrackerFirmwareVersion = TrioDeviceInformationInstance.FirmwareVersion;
 					this.status = await WSActivateDeviceWithMemberInstance.PostRequest();
 
 					if (this.status == WebServiceRequestStatus.SUCCESS)
@@ -528,12 +546,13 @@ namespace Motion.Core.SyncHandler
 							this.SetSettingsFromActivateDeviceWithMemberResponseWS(WSActivateDeviceWithMemberInstance.response);
 							ProcessCommands();
 						}
-						else
-						{
-							Debug.WriteLine("ActivateDeviceWithMemeber Response is " + WSActivateDeviceWithMemberInstance.response.ResponseMessage);
-							this.Adapter.DisconnectDevice(this.Device);
-						}
 
+
+					}
+					else
+					{
+						Debug.WriteLine("ActivateDeviceWithMemeber Response is " + WSActivateDeviceWithMemberInstance.response.ResponseMessage);
+						this.Adapter.DisconnectDevice(this.Device);
 					}
 					//this.Adapter.SendCommand(Ff07Char, CommandRequest);
 					break;
@@ -542,9 +561,9 @@ namespace Motion.Core.SyncHandler
 					WSGetDeviceInformationInstance.request.TrackerModel = TrioDeviceInformationInstance.ModelNumber;
 					WSGetDeviceInformationInstance.request.TrackerSerialNumber = TrioDeviceInformationInstance.SerialNumber;
 					WSGetDeviceInformationInstance.request.DeviceDateTime = Motion.Mobile.Utilities.Utils.GetDeviceDateTimeWithFormat(DateTime.Now);
-					WSGetDeviceInformationInstance.request.ApplicationID = 14487;
+					WSGetDeviceInformationInstance.request.ApplicationID = UserInformationInstance.ApplicationID;
 					WSGetDeviceInformationInstance.request.DevicePairingStatus = 1;
-					WSGetDeviceInformationInstance.request.TrackerFirmwareVersion = 4.3f;
+					WSGetDeviceInformationInstance.request.TrackerFirmwareVersion = TrioDeviceInformationInstance.FirmwareVersion;
 					this.status = await WSGetDeviceInformationInstance.PostRequest();
 
 					this.ServerReadTimeDuration = 0;
@@ -587,40 +606,51 @@ namespace Motion.Core.SyncHandler
 				case Constants.SyncHandlerSequence.WsUploadTallies:
 					Debug.WriteLine("SyncDeviceHandler961: WS Upload Tallies");
 
-					UserInformationInstance = new UserInformation();
-					UserInformationInstance.MemberDeviceId = 72277;
-					UserInformationInstance.ApplicationID = 14487;
-					UserInformationInstance.PlatformID = 1036;
+					WSUploadTalliesDataInstance.request.DeviceModel = TrioDeviceInformationInstance.ModelNumber;
+					WSUploadTalliesDataInstance.request.DeviceSerial = TrioDeviceInformationInstance.SerialNumber;
+					WSUploadTalliesDataInstance.request.MemberDeviceID = UserInformationInstance.MemberDeviceId;
+					WSUploadTalliesDataInstance.request.ApplicationID = UserInformationInstance.ApplicationID;
+					WSUploadTalliesDataInstance.request.PlatformID = UserInformationInstance.PlatformID;
+					WSUploadTalliesDataInstance.request.DeviceDateTime = Motion.Mobile.Utilities.Utils.GetServerDateTimeFromString(MemberServerProfileInstance.ServerDateTime);
+					WSUploadTalliesDataInstance.request.talliesData = TalliesDataInstance;
 
-
-					UploadTalliesDataInstance.request.DeviceModel = TrioDeviceInformationInstance.ModelNumber;
-					UploadTalliesDataInstance.request.DeviceSerial = TrioDeviceInformationInstance.SerialNumber;
-					UploadTalliesDataInstance.request.MemberDeviceID = UserInformationInstance.MemberDeviceId;
-					UploadTalliesDataInstance.request.ApplicationID = UserInformationInstance.ApplicationID;
-					UploadTalliesDataInstance.request.PlatformID = UserInformationInstance.PlatformID;
-					UploadTalliesDataInstance.request.DeviceDateTime = Motion.Mobile.Utilities.Utils.GetServerDateTimeFromString(MemberServerProfileInstance.ServerDateTime);
-					UploadTalliesDataInstance.request.talliesData = TalliesDataInstance;
-
-					this.status = await UploadTalliesDataInstance.PostRequest();
+					this.status = await WSUploadTalliesDataInstance.PostRequest();
 
 					if (this.status == WebServiceRequestStatus.SUCCESS)
 					{
 						Debug.WriteLine("Success");
-						if ((AppUpdateSettingsInstance.UpdateFlag && AppUpdateSettingsInstance.UpdateType != 2) || !AppUpdateSettingsInstance.UpdateFlag)
+
+						if (ApplicationInfoInstance.ApplicationID > 0 && ApplicationInfoInstance.PlatformID > 0)
 						{
-							if(!this.clearTracker)
+							if ((AppUpdateSettingsInstance.UpdateFlag && AppUpdateSettingsInstance.UpdateType != 2) || !AppUpdateSettingsInstance.UpdateFlag)
+							{
+								if (!this.clearTracker)
+								{
+									this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadSeizureSettings);
+									this.ProcessCommands();
+								}
+
+							}
+
+						}
+
+						else
+						{
+							this.isValidateAppInfo = true;
+							this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WsSendAppInfo);
 							this.ProcessCommands();
 						}
+
 
 					}
 					else
 					{
-						Debug.WriteLine("Upload Tallies Response is " + UploadTalliesDataInstance.response.ResponseMessage);
+						Debug.WriteLine("Upload Tallies Response is " + WSUploadTalliesDataInstance.response.ResponseStatus);
 						this.Adapter.DisconnectDevice(this.Device);
 					}
 					break;
 				case Constants.SyncHandlerSequence.WsUploadSteps:
-
+					Debug.WriteLine("SyncDeviceHandler961: WS Upload Steps");
 					this.CreateUploadStepsDataRequest(WSUploadStepsDataInstance.request);
 					this.status = await WSUploadStepsDataInstance.PostRequest();
 					if (this.status == WebServiceRequestStatus.SUCCESS)
@@ -648,6 +678,7 @@ namespace Motion.Core.SyncHandler
 					}
 					break;
 				case Constants.SyncHandlerSequence.WsUploadSignature:
+					Debug.WriteLine("SyncDeviceHandler961: WS Upload Signature");
 					this.CreateUploadSignatureRequestData(WSUploadSignatureDataInstance.request);
 					this.status = await WSUploadSignatureDataInstance.PostRequest();
 					if (this.status == WebServiceRequestStatus.SUCCESS)
@@ -685,9 +716,10 @@ namespace Motion.Core.SyncHandler
 				case Constants.SyncHandlerSequence.WsUploadProfile:
 					break;
 				case Constants.SyncHandlerSequence.WsUnpairDevice:
+					Debug.WriteLine("SyncDeviceHandler961: WS Unpair Device");
 					WSUnpairMemberDeviceInstance.request.DeviceID = WSActivateDeviceWithMemberInstance.response.DeviceID;
-					WSUnpairMemberDeviceInstance.request.MemberID = 56375;
-					WSUnpairMemberDeviceInstance.request.MemberDeviceID = 72273;
+					WSUnpairMemberDeviceInstance.request.MemberID = UserInformationInstance.MemberID;
+					WSUnpairMemberDeviceInstance.request.MemberDeviceID = UserInformationInstance.MemberDeviceId;
 					this.status = await WSUploadSeiureDataInstance.PostRequest();
 					if (this.status == WebServiceRequestStatus.SUCCESS)
 					{
@@ -695,6 +727,7 @@ namespace Motion.Core.SyncHandler
 					}
 					break;
 				case Constants.SyncHandlerSequence.WsUploadSeizure:
+					Debug.WriteLine("SyncDeviceHandler961: WS Upload Seizure");
 					this.CreateUploadSeizureRequestData(WSUploadSeiureDataInstance.request);
 					this.status = await WSUploadSeiureDataInstance.PostRequest();
 					if (this.status == WebServiceRequestStatus.SUCCESS)
@@ -744,14 +777,17 @@ namespace Motion.Core.SyncHandler
 
 					long dateTimeInUnix = (long)Motion.Mobile.Utilities.Utils.DateTimeToUnixTimestamp(currentDateTime);
 
-					WSNotifySettingsUpdateInstance.request.MemberID = 56375;
-					WSNotifySettingsUpdateInstance.request.MemberDeviceID = 72273;
+					DateTime dateTime = new DateTime(DeviceSettingsInstance.Year + 2000, DeviceSettingsInstance.Month, DeviceSettingsInstance.Day, DeviceSettingsInstance.Hour, DeviceSettingsInstance.Minute, DeviceSettingsInstance.Second);
+					dateTime.AddSeconds(this.DeviceReadTimeDuration);
+
+					WSNotifySettingsUpdateInstance.request.MemberID = UserInformationInstance.MemberID;
+					WSNotifySettingsUpdateInstance.request.MemberDeviceID = UserInformationInstance.MemberDeviceId;
 					WSNotifySettingsUpdateInstance.request.LastSyncSettingDateTime = dateTimeInUnix;
 					WSNotifySettingsUpdateInstance.request.TrackerModel = TrioDeviceInformationInstance.ModelNumber;
-					WSNotifySettingsUpdateInstance.request.UpdateFlag = 3327;
-					WSNotifySettingsUpdateInstance.request.SettingType = 3327;
-					WSNotifySettingsUpdateInstance.request.DevicePairingStatus = 0;
-					WSNotifySettingsUpdateInstance.request.DeviceDateTime = null;
+					WSNotifySettingsUpdateInstance.request.UpdateFlag = MemberServerProfileInstance.UpdateFlag;
+					WSNotifySettingsUpdateInstance.request.SettingType = MemberServerProfileInstance.UpdateFlagChanges;
+					WSNotifySettingsUpdateInstance.request.DevicePairingStatus = DeviceStatusInstance.PairingStatus;
+					WSNotifySettingsUpdateInstance.request.DeviceDateTime = Motion.Mobile.Utilities.Utils.GetDeviceDateTimeWithFormat(dateTime);
 					WSNotifySettingsUpdateInstance.request.BatteryLevel = TrioDeviceInformationInstance.BatteryLevel;
 
 
@@ -760,19 +796,76 @@ namespace Motion.Core.SyncHandler
 					{
 						Debug.WriteLine("WS Notify Settings Update Successful");
 					}
+					else
+					{
+						Debug.WriteLine("WS Notify Settings Update Response is " + WSNotifySettingsUpdateInstance.response.ResponseMessage);
+						this.Adapter.DisconnectDevice(this.Device);
+					}
 					break;
 				case Constants.SyncHandlerSequence.WsUploadCommandResponse:
 					Debug.WriteLine("SyncDeviceHandler961: WS Upload Command Response");
 					WSUploadCommandResponseInstance.request.commandRespData.UploadCommand = 0x58;
 					WSUploadCommandResponseInstance.request.DeviceModel = TrioDeviceInformationInstance.ModelNumber;
 					WSUploadCommandResponseInstance.request.DeviceSerial = TrioDeviceInformationInstance.SerialNumber;
-					WSUploadCommandResponseInstance.request.MemberDeviceID = 72277;
-					WSUploadCommandResponseInstance.request.ApplicationID = 14487;
-					WSUploadCommandResponseInstance.request.PlatformID = 1036;
+					WSUploadCommandResponseInstance.request.MemberDeviceID = UserInformationInstance.MemberDeviceId;
+					WSUploadCommandResponseInstance.request.ApplicationID = UserInformationInstance.ApplicationID;
+					WSUploadCommandResponseInstance.request.PlatformID = UserInformationInstance.PlatformID;
 					WSUploadCommandResponseInstance.request.SynchronizationID = this.MemberServerProfileInstance.SynchronizationID;
+					this.status = await WSUploadCommandResponseInstance.PostRequest();
 					if (this.status == WebServiceRequestStatus.SUCCESS)
 					{
-						Debug.WriteLine("WS Upload Command Response");
+						Debug.WriteLine("WS Upload Command Successful!");
+					}
+					else
+					{
+						Debug.WriteLine("WS Upload Command Response is " + WSUploadCommandResponseInstance.response.ResponseMessage);
+						this.Adapter.DisconnectDevice(this.Device);
+					}
+					break;	
+				case Constants.SyncHandlerSequence.WsSendAppInfo:
+					Debug.WriteLine("SyncDeviceHandler961: WS Validate App Info");
+					WSSendAppInfoInstance.request.ApplicationName = ApplicationInfoInstance.ApplicationName;
+					WSSendAppInfoInstance.request.ApplicationVersion = ApplicationInfoInstance.ApplicationVersion;
+					WSSendAppInfoInstance.request.OperatingSystem = ApplicationInfoInstance.OperatingSystem;
+					WSSendAppInfoInstance.request.OperatingSystemVersion = ApplicationInfoInstance.OperatingSystemVersion;
+					WSSendAppInfoInstance.request.PlatformType = ApplicationInfoInstance.PlatformType;
+					WSSendAppInfoInstance.request.Brand = ApplicationInfoInstance.Brand;
+					WSSendAppInfoInstance.request.Model = ApplicationInfoInstance.Model;
+					WSSendAppInfoInstance.request.Manufacturer = ApplicationInfoInstance.Manufacturer;
+					WSSendAppInfoInstance.request.CommunicationType = ApplicationInfoInstance.CommunicationType;
+					this.status = await WSSendAppInfoInstance.PostRequest();
+					if (this.status == WebServiceRequestStatus.SUCCESS)
+					{
+						Debug.WriteLine("WS Validate App Info Successful");
+
+						this.UserInformationInstance.ApplicationID = WSSendAppInfoInstance.response.ApplicationID;
+						this.UserInformationInstance.PlatformID = WSSendAppInfoInstance.response.PlatformID;
+						if (this.isValidateAppInfo)
+						{
+							this.ApplicationInfoInstance.ApplicationID = WSSendAppInfoInstance.response.ApplicationID;
+							this.ApplicationInfoInstance.PlatformID = WSSendAppInfoInstance.response.PlatformID;
+							if ((AppUpdateSettingsInstance.UpdateFlag && AppUpdateSettingsInstance.UpdateType != 2) || !AppUpdateSettingsInstance.UpdateFlag)
+							{
+								if (!this.clearTracker)
+									this.ProcessCommands();
+								else
+								{
+									this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WriteDeviceSettings);
+									this.ProcessCommands();
+								}
+							}
+
+						}
+						else
+						{ 
+							this.AppUpdateSettingsInstance.UpdateType = WSSendAppInfoInstance.response.appUpdateInfo.UpdateType;
+						}
+
+					}
+					else
+					{
+						Debug.WriteLine("WS Validate App Info Response is " + WSUploadCommandResponseInstance.response.ResponseMessage);
+						this.Adapter.DisconnectDevice(this.Device);
 					}
 					break;	
 				default:
@@ -853,16 +946,21 @@ namespace Motion.Core.SyncHandler
 			switch (this.Command)
 			{
 				case Constants.SyncHandlerSequence.WriteScreenDisplay:
+					
 					this.ParsingStatus = await DisplayOnScreenInstance.ParseData(e.Data);
 					// For testing purposes only
-					bool success = ValidateActivationCode("1234");
-					if (success)
+
+					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
 					{
-						StatusEventArgs args = new StatusEventArgs();
-						args.isEqual = success;
-						this.FourDigitCodeChecked(this,args);
-						this.ProcessCommands();
+						this.ValidationCodeDisplayed(this, new EventArgs());
 					}
+
+					else
+					{
+						this.Adapter.DisconnectDevice(this.Device);
+					}
+
+
 						
 					break;
 				case Constants.SyncHandlerSequence.ReadTallies:
@@ -907,15 +1005,18 @@ namespace Motion.Core.SyncHandler
 					{
 						if (this.ScanType == Constants.ScanType.ACTIVATION)
 						{
-							this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WsSendNotifySettingsUpdate);
+							// To be added
+							//this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WsSendNotifyMessageSettingsUpdate);
+							this.Adapter.DisconnectDevice(this.Device);
 
 						}
 						else
 						{ 
 							timerForDevice = new Timer(timerCallBack, new object(), 0, 1000);
 							timerForDevice.Increment += TimerForDevice_Increment;
+							this.ProcessCommands();
 						}
-						this.ProcessCommands();
+
 					}
 					else {
 						this.Adapter.DisconnectDevice(this.Device);
@@ -988,7 +1089,7 @@ namespace Motion.Core.SyncHandler
 					this.ParsingStatus = await SeizureBlocksDataInstance.ParseData(e.Data);
 					if (this.ParsingStatus == BLEParsingStatus.SUCCESS)
 					{
-						this.ProcessCommands();
+						this.ProcessSeizureBlocksResponse();
 					}
 					else {
 						this.Adapter.DisconnectDevice(this.Device);
@@ -1110,6 +1211,7 @@ namespace Motion.Core.SyncHandler
 						if (this.clearTracker)
 						{
 							this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ClearEEProm);
+							this.ProcessCommands();
 						}
 						if (this.isUnFlaggingTableHeaderDueToTimeChange && this.TimeChangeTableDataList.Count() > 1)
 						{
@@ -1347,6 +1449,7 @@ namespace Motion.Core.SyncHandler
 			this.WebService = webservice;
 		}
 
+
 		private void InitDataModelObjects()
 		{
 			UserSettingsInstance = new UserSettings(TrioDeviceInformationInstance);
@@ -1364,7 +1467,7 @@ namespace Motion.Core.SyncHandler
 			FirmwareDisplaySequenceInstance = new FirmwareDisplaySequenceData(TrioDeviceInformationInstance);
 			WSNotifySettingsUpdateInstance = new NotifySettingsUpdate();
 			WSGetDeviceInformationInstance = new GetDeviceInformation(TrioDeviceInformationInstance);
-			UploadTalliesDataInstance = new UploadTalliesData(TrioDeviceInformationInstance);
+			WSUploadTalliesDataInstance = new UploadTalliesData(TrioDeviceInformationInstance);
 			TalliesDataInstance = new TalliesData(TrioDeviceInformationInstance);
 			SeizureBlocksDataInstance = new SeizureBlocksData(TrioDeviceInformationInstance);
 			WSUploadStepsDataInstance = new UploadStepsData();
@@ -1376,9 +1479,10 @@ namespace Motion.Core.SyncHandler
 			WSUploadSeiureDataInstance = new UploadSeizureData();
 			WSUnpairMemberDeviceInstance = new UnpairMemberDevice();
 			WSUploadCommandResponseInstance = new UploadCommandResponse();
+			WSSendAppInfoInstance = new SendApplicationInformation();
 		}
 
-		public bool ValidateActivationCode(string enteredCode)
+		public void ValidateActivationCode(string enteredCode)
 		{
 			/*String strGenerated = "";
 			for (int i = 0; i < this.ActivationCode.Length; i++)
@@ -1386,14 +1490,37 @@ namespace Motion.Core.SyncHandler
 				string temp = Convert.ToString(this.ActivationCode[i]);
 				strGenerated.Insert(i,temp );
 			}*/
+
+
 			String strGenerated =  System.Text.Encoding.UTF8.GetString(this.ActivationCode, 0, this.ActivationCode.Length);
-			return Utils.ValidateActivationCode(strGenerated, enteredCode);
+			bool  flag = Utils.ValidateActivationCode(strGenerated, enteredCode);
+
+			StatusEventArgs status = new StatusEventArgs();
+			status.isEqual = flag;
+			this.CodeValidated(this, status);
+
+			if (flag)
+				this.ProcessCommands();
+			else
+				this.Adapter.DisconnectDevice(this.Device);
+				
+
+
 		}
 
-		public void SetUserInfo(UserInformation userInfo)
+		public void SetUserInformation(UserInformation userInfo)
 		{
 			UserInformationInstance = userInfo;
 		}
+
+		public void SetApplicationInformation(ApplicationInfo appInfo)
+		{
+			ApplicationInfoInstance = appInfo;
+			this.isValidateAppInfo = false;
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WsSendAppInfo);
+			this.ProcessCommands();
+		}
+
 
 		void TimerForServer_Increment(object sender, EventArgs e)
 		{
@@ -1407,8 +1534,13 @@ namespace Motion.Core.SyncHandler
 			Debug.WriteLine(this.DeviceReadTimeDuration);
 		}
 
+
 		private void SetSettingsFromActivateDeviceWithMemberResponseWS(ActivateDeviceWithMemberResponse WSActivateDeviceWithMemberResponseInstance)
 		{
+			//UserInfo
+			UserInformationInstance.MemberDeviceId = WSActivateDeviceWithMemberResponseInstance.MemberDeviceID;
+
+
 			// Device Data Settings
 			DeviceDataInstance = new DeviceData();
 			DeviceDataInstance.AdvertiseMode = WSActivateDeviceWithMemberResponseInstance.AdvertiseMode;
@@ -1446,6 +1578,14 @@ namespace Motion.Core.SyncHandler
 
 			this.clearTracker = WSActivateDeviceWithMemberResponseInstance.ClearTrackerDataFlag;
 
+
+			MemberServerProfileInstance = new MemberServerProfile();
+			MemberServerProfileInstance.MemberDeviceID = WSActivateDeviceWithMemberResponseInstance.MemberDeviceID;
+			MemberServerProfileInstance.UpdateFlag = (int)WSActivateDeviceWithMemberResponseInstance.UpdateFlag;
+			MemberServerProfileInstance.UpdateFlagChanges = (int)WSActivateDeviceWithMemberResponseInstance.UpdateFlag;
+			MemberServerProfileInstance.SynchronizationID = WSActivateDeviceWithMemberResponseInstance.SynchronizationID;
+			MemberServerProfileInstance.ServerDateTime = WSActivateDeviceWithMemberResponseInstance.ServerDateTime;
+
 			//Company Settings
 			CompanySettingsInstance.TenacitySteps = WSActivateDeviceWithMemberResponseInstance.companySettings.TenacitySteps;
 			CompanySettingsInstance.IntensitySteps = WSActivateDeviceWithMemberResponseInstance.companySettings.IntensitySteps;
@@ -1481,9 +1621,9 @@ namespace Motion.Core.SyncHandler
 
 		private void SetSettingsFromGetDeviceInfoResponseWS(GetDeviceInfoResponse WSGetDeviceInfoResponseInstance)
 		{
-			
 
-			AppUpdateSettingsInstance = new ApplicationUpdateSettings();
+			UserInformationInstance.MemberDeviceId = WSGetDeviceInfoResponseInstance.MemberDeviceID;
+
 			AppUpdateSettingsInstance.UpdateFlag = WSGetDeviceInfoResponseInstance.appUpdateInfo.UpdateFlag;
 			AppUpdateSettingsInstance.UpdateType = WSGetDeviceInfoResponseInstance.appUpdateInfo.UpdateType;
 			AppUpdateSettingsInstance.VersionOfNewApp = WSGetDeviceInfoResponseInstance.appUpdateInfo.VersionOfNewApp;
@@ -1496,7 +1636,7 @@ namespace Motion.Core.SyncHandler
 
 			MemberServerProfileInstance = new MemberServerProfile();
 			MemberServerProfileInstance.MemberDeviceID = WSGetDeviceInfoResponseInstance.MemberDeviceID;
-			MemberServerProfileInstance.UpdateFlag = WSGetDeviceInfoResponseInstance.UpdateFlag;
+			MemberServerProfileInstance.UpdateFlag = (int)WSGetDeviceInfoResponseInstance.UpdateFlag;
 			MemberServerProfileInstance.UpdateFlagChanges = 0;
 			MemberServerProfileInstance.SynchronizationID = WSGetDeviceInfoResponseInstance.SynchronizationID;
 			MemberServerProfileInstance.ServerDateTime = WSGetDeviceInfoResponseInstance.ServerDateTime;
@@ -1506,6 +1646,7 @@ namespace Motion.Core.SyncHandler
 
 
 			ProcessSignatureUploaded(WSGetDeviceInfoResponseInstance.SignatureUploadedDates);
+			this.SeizureBlockInfoInstance = new SeizureBlockInfo();
 			if(WSGetDeviceInfoResponseInstance.lastSeizureDataUploadInfo != null)
 				ProcessSeizureUploaded(WSGetDeviceInfoResponseInstance.lastSeizureDataUploadInfo.SeizureDate,WSGetDeviceInfoResponseInstance.lastSeizureDataUploadInfo.BlockNumber);
 
@@ -1592,7 +1733,7 @@ namespace Motion.Core.SyncHandler
 			if (!string.Equals("", dateInString))
 			{
 
-				this.SeizureBlockInfoInstance = new SeizureBlockInfo();
+
 				DateTime dt = Motion.Mobile.Utilities.Utils.GetServerDateTimeFromString(dateInString);
 				this.SeizureBlockInfoInstance.sbYear = dt.Year - 2000;
 				this.SeizureBlockInfoInstance.sbMonth = dt.Month;
@@ -1606,7 +1747,6 @@ namespace Motion.Core.SyncHandler
 
 		private void AddSignatureToBeUploadedDates()
 		{ 
-			this.SignatureToBeUploadedTableList = new List<StepsTableParameters>();
 
 			if (SignatureUploadedDatesList.Count > 0)
 			{
@@ -1648,14 +1788,14 @@ namespace Motion.Core.SyncHandler
 			DateTime dateTime = new DateTime(DeviceSettingsInstance.Year + 2000, DeviceSettingsInstance.Month, DeviceSettingsInstance.Day, DeviceSettingsInstance.Hour, DeviceSettingsInstance.Minute, DeviceSettingsInstance.Second);
 			dateTime.AddSeconds(this.DeviceReadTimeDuration);
 
-			WSUploadStepsDataRequestInstance.MemberID = 56375;
-			WSUploadStepsDataRequestInstance.MemberDeviceID = 72277;
+			WSUploadStepsDataRequestInstance.MemberID = UserInformationInstance.MemberID;
+			WSUploadStepsDataRequestInstance.MemberDeviceID = UserInformationInstance.MemberDeviceId;
 			WSUploadStepsDataRequestInstance.LastSyncSettingDateTime =(long) Motion.Mobile.Utilities.Utils.DateTimeToUnixTimestamp(DateTime.Now);
-			WSUploadStepsDataRequestInstance.ApplicationID = 14487;
-			WSUploadStepsDataRequestInstance.PlatformID = 1036;
+			WSUploadStepsDataRequestInstance.ApplicationID = UserInformationInstance.ApplicationID;
+			WSUploadStepsDataRequestInstance.PlatformID = UserInformationInstance.PlatformID;
 			WSUploadStepsDataRequestInstance.MemberRMR = UserSettingsInstance.RestMetabolicRate;
 			WSUploadStepsDataRequestInstance.MinuteDataType = 1;
-			WSUploadStepsDataRequestInstance.HostName = "mactest";
+			WSUploadStepsDataRequestInstance.HostName = ApplicationInfoInstance.PlatformType;
 			WSUploadStepsDataRequestInstance.TrackerFirmwareVersion = TrioDeviceInformationInstance.FirmwareVersion;
 			WSUploadStepsDataRequestInstance.SyncType = TrioDeviceInformationInstance.BroadcastType;
 			WSUploadStepsDataRequestInstance.BatteryLevel = TrioDeviceInformationInstance.BatteryLevel;
@@ -1666,6 +1806,7 @@ namespace Motion.Core.SyncHandler
 			WSUploadStepsDataRequestInstance.TrackerSerialNumber = TrioDeviceInformationInstance.SerialNumber;
 			WSUploadStepsDataRequestInstance.TrackerModel = TrioDeviceInformationInstance.ModelNumber;
 			WSUploadStepsDataRequestInstance.SynchronizationID = MemberServerProfileInstance.SynchronizationID;
+			WSUploadStepsDataRequestInstance.StepsData = StepsDataInstance.dailyData;
 				 
 		}
 
@@ -1674,12 +1815,12 @@ namespace Motion.Core.SyncHandler
 			DateTime dateTime = new DateTime(DeviceSettingsInstance.Year + 2000, DeviceSettingsInstance.Month, DeviceSettingsInstance.Day, DeviceSettingsInstance.Hour, DeviceSettingsInstance.Minute, DeviceSettingsInstance.Second);
 			dateTime.AddSeconds(this.DeviceReadTimeDuration);
 
-			UploadSignatureDataRequestInstance.MemberID = 56375;
-			UploadSignatureDataRequestInstance.MemberDeviceID = 72277;
+			UploadSignatureDataRequestInstance.MemberID = UserInformationInstance.MemberID;
+			UploadSignatureDataRequestInstance.MemberDeviceID = UserInformationInstance.MemberDeviceId;
 			UploadSignatureDataRequestInstance.LastSyncSettingDateTime = (long) Motion.Mobile.Utilities.Utils.DateTimeToUnixTimestamp(DateTime.Now);
-			UploadSignatureDataRequestInstance.ApplicationID = 14487;
-			UploadSignatureDataRequestInstance.PlatformID = 1036;
-			UploadSignatureDataRequestInstance.HostName = "mactest";
+			UploadSignatureDataRequestInstance.ApplicationID = UserInformationInstance.ApplicationID;
+			UploadSignatureDataRequestInstance.PlatformID = UserInformationInstance.PlatformID;
+			UploadSignatureDataRequestInstance.HostName = ApplicationInfoInstance.PlatformType;
 			UploadSignatureDataRequestInstance.TrackerFirmwareVersion = TrioDeviceInformationInstance.FirmwareVersion;
 			UploadSignatureDataRequestInstance.SyncType = TrioDeviceInformationInstance.BroadcastType;
 			UploadSignatureDataRequestInstance.BatteryLevel = TrioDeviceInformationInstance.BatteryLevel;
@@ -1699,12 +1840,12 @@ namespace Motion.Core.SyncHandler
 			DateTime dateTime = new DateTime(DeviceSettingsInstance.Year + 2000, DeviceSettingsInstance.Month, DeviceSettingsInstance.Day, DeviceSettingsInstance.Hour, DeviceSettingsInstance.Minute, DeviceSettingsInstance.Second);
 			dateTime.AddSeconds(this.DeviceReadTimeDuration);
 
-			UploadSeizureDataRequestInstance.MemberID = 56375;
-			UploadSeizureDataRequestInstance.MemberDeviceID = 72277;
+			UploadSeizureDataRequestInstance.MemberID = UserInformationInstance.MemberID;
+			UploadSeizureDataRequestInstance.MemberDeviceID = UserInformationInstance.MemberDeviceId;
 			UploadSeizureDataRequestInstance.LastSyncSettingDateTime =(long) Motion.Mobile.Utilities.Utils.DateTimeToUnixTimestamp(DateTime.Now);
-			UploadSeizureDataRequestInstance.ApplicationID = 14487;
-			UploadSeizureDataRequestInstance.PlatformID = 1036;
-			UploadSeizureDataRequestInstance.HostName = "mactest";
+			UploadSeizureDataRequestInstance.ApplicationID = UserInformationInstance.ApplicationID;
+			UploadSeizureDataRequestInstance.PlatformID = UserInformationInstance.PlatformID;
+			UploadSeizureDataRequestInstance.HostName = ApplicationInfoInstance.PlatformType;
 			UploadSeizureDataRequestInstance.TrackerFirmwareVersion = TrioDeviceInformationInstance.FirmwareVersion;
 			UploadSeizureDataRequestInstance.SyncType = TrioDeviceInformationInstance.BroadcastType;
 			UploadSeizureDataRequestInstance.BatteryLevel = TrioDeviceInformationInstance.BatteryLevel;
@@ -1982,8 +2123,8 @@ namespace Motion.Core.SyncHandler
 			}
 
 			else
-			{ 
-				
+			{
+				this.CheckSeizureOrSignatureForUpload();
 			}
 		}
 
@@ -2054,9 +2195,39 @@ namespace Motion.Core.SyncHandler
 			else
 			{
 				if (this.SignatureToBeUploadedTableList.Count() > 0)
-				{ 
+				{
 					this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadSignature);
 					this.ProcessCommands();
+				}
+				else
+				{
+					if (this.MemberServerProfileInstance.UpdateFlag > 0)
+					{
+						this.UpdateSettingsFlag(Utils.USER_SETTINGS_BIT_LOC);
+					}
+					else if (this.MemberServerProfileInstance.UpdateFlagChanges > 0)
+					{
+						this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.WsSendNotifySettingsUpdate);
+						this.ProcessCommands();
+					}
+					else
+					{ 
+						// Messaging support will be added later
+						//if ([self.surveyCodeNotAnswerArray count] > 0)
+						//{
+						//	//check if server is waiting for the answered survey
+						//	//Read the survey answer status if answered or not.
+						//	[NSUtilities LogActivity:@"Reading Survey Answers from Trio..." logLevel:_INFO];
+      //                      [[LeDiscovery sharedInstance]startReadService:peripheral action:READ_SURVEY_ANSWER_COMMAND data:@"00"];
+						//}
+      //                  else
+                        //{
+                            //Check if clear messages flag is set.
+                            //If set, then clear messages data.
+						this.UpdateSettingsFlag(Utils.CLEAR_MESSAGES_SETTINGS_BIT_LOC);
+                        //}
+
+					}
 				}
 			}
 				
@@ -2182,6 +2353,179 @@ namespace Motion.Core.SyncHandler
 
 		}
 
+		private void ProcessSeizureBlocksResponse()
+		{
+			if (this.SeizureBlockInfoInstance.sbYear == 0 && this.SeizureBlockInfoInstance.sbMonth == 0 && this.SeizureBlockInfoInstance.sbDay == 0)
+			{
+				if (SeizureBlocksDataInstance.seizureBlocksData.Count() > 0)
+				{
+					foreach (SeizureBlocksParameters seizureBlock in SeizureBlocksDataInstance.seizureBlocksData)
+					{
+						if (seizureBlock.sbRecordStatus == 1)
+						{
+							for (int i = 0; i < Constants.TOTAL_SEIZURE_BLOCKS_PER_RECORD; i++)
+							{
+								SeizureBlockInfo seizureRecordBlockToRead = new SeizureBlockInfo();
+								seizureRecordBlockToRead.sbYear = seizureBlock.sbYear;
+								seizureRecordBlockToRead.sbMonth = seizureBlock.sbMonth;
+								seizureRecordBlockToRead.sbDay = seizureBlock.sbDay;
+								seizureRecordBlockToRead.sbseizureRecordNo = seizureBlock.sbRecordNo;
+								seizureRecordBlockToRead.sbSeizureBlock = i;
+
+
+								this.SeizureToBeUploadedList.Add(seizureRecordBlockToRead);
+							}
+						}
+					}
+				}
+			}
+			else
+			{
+				if (this.SeizureBlocksContainsLastSeizureUpload())
+				{
+					bool lastSeizureRecordUploadCompleted = false;
+					foreach (SeizureBlocksParameters seizureBlock in SeizureBlocksDataInstance.seizureBlocksData)
+					{
+						if (seizureBlock.sbYear == (this.SeizureBlockInfoInstance.sbYear - 2000) &&
+							seizureBlock.sbMonth == this.SeizureBlockInfoInstance.sbMonth &&
+							seizureBlock.sbDay == this.SeizureBlockInfoInstance.sbDay
+							&& seizureBlock.sbHour == this.SeizureBlockInfoInstance.sbHour
+							&& seizureBlock.sbMinute == this.SeizureBlockInfoInstance.sbMinute)
+						{
+							if (seizureBlock.sbRecordNo == 2)
+							{
+								if (this.SeizureBlockInfoInstance.sbSeizureBlock == Constants.TOTAL_SEIZURE_BLOCKS_PER_RECORD)
+								{
+									lastSeizureRecordUploadCompleted = true;
+									continue;
+								}
+								else
+								{
+									if (seizureBlock.sbRecordStatus == 1)
+									{
+										//proceed uploading remaining blocks of oldest record
+										for (int i = this.SeizureBlockInfoInstance.sbSeizureBlock; i < Constants.TOTAL_SEIZURE_BLOCKS_PER_RECORD; i++)
+										{
+
+											SeizureBlockInfo seizureRecordBlockToRead = new SeizureBlockInfo();
+											seizureRecordBlockToRead.sbYear = seizureBlock.sbYear;
+											seizureRecordBlockToRead.sbMonth = seizureBlock.sbMonth;
+											seizureRecordBlockToRead.sbDay = seizureBlock.sbDay;
+											seizureRecordBlockToRead.sbseizureRecordNo = seizureBlock.sbRecordNo;
+											seizureRecordBlockToRead.sbSeizureBlock = i;
+
+											this.SeizureToBeUploadedList.Add(seizureRecordBlockToRead);
+
+
+										}
+									}
+								}
+
+							}
+
+							else
+							{
+								if (this.SeizureBlockInfoInstance.sbSeizureBlock == Constants.TOTAL_SEIZURE_BLOCKS_PER_RECORD)
+								{
+									continue;
+								}
+								else
+								{
+									if (seizureBlock.sbRecordStatus == 1)
+									{
+										//proceed uploading remaining blocks of newest record
+										for (int i = this.SeizureBlockInfoInstance.sbSeizureBlock; i < Constants.TOTAL_SEIZURE_BLOCKS_PER_RECORD; i++)
+										{
+
+											SeizureBlockInfo seizureRecordBlockToRead = new SeizureBlockInfo();
+											seizureRecordBlockToRead.sbYear = seizureBlock.sbYear;
+											seizureRecordBlockToRead.sbMonth = seizureBlock.sbMonth;
+											seizureRecordBlockToRead.sbDay = seizureBlock.sbDay;
+											seizureRecordBlockToRead.sbseizureRecordNo = seizureBlock.sbRecordNo;
+											seizureRecordBlockToRead.sbSeizureBlock = i;
+
+											this.SeizureToBeUploadedList.Add(seizureRecordBlockToRead);
+
+
+										}
+
+									}
+
+								}
+							}
+
+						}
+						else
+						{
+							if (this.SeizureToBeUploadedList.Count() > 0 || lastSeizureRecordUploadCompleted)
+							{
+								if (seizureBlock.sbRecordStatus == 1)
+								{
+									for (int i = 0; i < Constants.TOTAL_SEIZURE_BLOCKS_PER_RECORD; i++)
+									{
+										SeizureBlockInfo seizureRecordBlockToRead = new SeizureBlockInfo();
+										seizureRecordBlockToRead.sbYear = seizureBlock.sbYear;
+										seizureRecordBlockToRead.sbMonth = seizureBlock.sbMonth;
+										seizureRecordBlockToRead.sbDay = seizureBlock.sbDay;
+										seizureRecordBlockToRead.sbseizureRecordNo = seizureBlock.sbRecordNo;
+										seizureRecordBlockToRead.sbSeizureBlock = i;
+
+										this.SeizureToBeUploadedList.Add(seizureRecordBlockToRead);
+
+									}
+
+								}
+
+							}
+						}
+					}
+				}
+				else
+				{
+					foreach (SeizureBlocksParameters seizureBlock in SeizureBlocksDataInstance.seizureBlocksData)
+					{
+						if (seizureBlock.sbRecordStatus == 1)
+						{
+							for (int i = 0; i < Constants.TOTAL_SEIZURE_BLOCKS_PER_RECORD; i++)
+							{
+
+								SeizureBlockInfo seizureRecordBlockToRead = new SeizureBlockInfo();
+								seizureRecordBlockToRead.sbYear = seizureBlock.sbYear;
+								seizureRecordBlockToRead.sbMonth = seizureBlock.sbMonth;
+								seizureRecordBlockToRead.sbDay = seizureBlock.sbDay;
+								seizureRecordBlockToRead.sbseizureRecordNo = seizureBlock.sbRecordNo;
+								seizureRecordBlockToRead.sbSeizureBlock = i;
+
+								this.SeizureToBeUploadedList.Add(seizureRecordBlockToRead);
+
+
+							}
+                        }
+
+               		}
+				}
+			}
+
+			this.ProcessQeueue.Enqueue(Constants.SyncHandlerSequence.ReadStepsHeader);
+			this.ProcessCommands();
+		}
+
+		private bool SeizureBlocksContainsLastSeizureUpload ()
+		{ 
+			bool hasLastSeizureInfo = false;
+    		foreach (SeizureBlocksParameters seizureBlock in SeizureBlocksDataInstance.seizureBlocksData)
+			{
+				//check current unfinish uploaded seizure record if still exist in the device using the dates
+				if (seizureBlock.sbYear == (this.SeizureBlockInfoInstance.sbYear - 2000) && seizureBlock.sbMonth == this.SeizureBlockInfoInstance.sbMonth && 
+				    seizureBlock.sbDay == this.SeizureBlockInfoInstance.sbDay && seizureBlock.sbHour == this.SeizureBlockInfoInstance.sbHour && 
+				    seizureBlock.sbMinute == this.SeizureBlockInfoInstance.sbMinute)
+				{
+					hasLastSeizureInfo = true;
+					break;
+				}
+			}
+			return hasLastSeizureInfo;
+		}
 
 		private void UploadSignatureData()
 		{ 

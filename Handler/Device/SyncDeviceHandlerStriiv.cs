@@ -5,6 +5,7 @@ using Motion.Core.WSHandler;
 using Motion.Mobile.Core.BLE;
 using Motion.Mobile.Utilities;
 using Motion.Core.Data.UserData;
+using Motion.Core.Data.AppData;
 
 namespace Motion.Core.SyncHandler
 {
@@ -23,6 +24,9 @@ namespace Motion.Core.SyncHandler
 		private Queue<Constants.StriivSyncHandlerSequence> ProcessQeueue = new Queue<Constants.StriivSyncHandlerSequence>();
 		private Constants.StriivSyncHandlerSequence Command;
 		private EventHandler<CharacteristicReadEventArgs> NotifyStateUpdated = null;
+		public event EventHandler<EventArgs> SyncStarted = delegate { };
+		public event EventHandler<EventArgs> ValidationCodeDisplayed = delegate { };
+		public event EventHandler<StatusEventArgs> CodeValidated = delegate { };
 
 		private byte[] CommandRequest;
 		private List<byte[]> PacketsReceived = new List<byte[]>();
@@ -291,12 +295,17 @@ namespace Motion.Core.SyncHandler
 			//Clean packets received - end
 		}
 
-		public bool ValidateActivationCode(string enteredCode)
+		public void ValidateActivationCode(string enteredCode)
 		{
 			throw new NotImplementedException();
 		}
 
-		public void SetUserInfo(UserInformation userInfo)
+		public void SetUserInformation(UserInformation userInfo)
+		{
+			throw new NotImplementedException();
+		}
+
+		public void SetApplicationInformation(ApplicationInfo appInfo)
 		{
 			throw new NotImplementedException();
 		}

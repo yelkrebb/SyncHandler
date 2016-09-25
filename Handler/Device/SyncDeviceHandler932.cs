@@ -5,6 +5,7 @@ using Motion.Core.WSHandler;
 using Motion.Mobile.Core.BLE;
 using Motion.Mobile.Utilities;
 using Motion.Core.Data.UserData;
+using Motion.Core.Data.AppData;
 
 namespace Motion.Core.SyncHandler
 {
@@ -15,6 +16,9 @@ namespace Motion.Core.SyncHandler
 
 		public event EventHandler IncrementProgressBar = delegate { };
 		public event EventHandler<SyncDoneEventArgs> SyncDone = delegate { };
+		public event EventHandler<EventArgs> SyncStarted = delegate { };
+		public event EventHandler<EventArgs> ValidationCodeDisplayed = delegate { };
+		public event EventHandler<StatusEventArgs> CodeValidated = delegate { };
 
 		private IAdapter Adapter;
 		private IDevice Device;
@@ -369,12 +373,17 @@ namespace Motion.Core.SyncHandler
 			this.WebService = webservice;
 		}
 
-		public bool ValidateActivationCode(string enteredCode)
+		public void ValidateActivationCode(string enteredCode)
 		{
 			throw new NotImplementedException();
 		}
 
-		public void SetUserInfo(UserInformation userInfo)
+		public void SetUserInformation(UserInformation userInfo)
+		{
+			throw new NotImplementedException();
+		}
+
+		public void SetApplicationInformation(ApplicationInfo appInfo)
 		{
 			throw new NotImplementedException();
 		}

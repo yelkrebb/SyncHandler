@@ -6,6 +6,7 @@ using Motion.Core.WSHandler;
 using Motion.Mobile.Core.BLE;
 using Motion.Mobile.Utilities;
 using Motion.Core.Data.UserData;
+using Motion.Core.Data.AppData;
 
 
 namespace Motion.Core.SyncHandler
@@ -17,6 +18,7 @@ namespace Motion.Core.SyncHandler
 
 		public event EventHandler ScanStarted = delegate { };
 		public event EventHandler ScanStopped = delegate { };
+		public event EventHandler SyncStarted = delegate { };
 		public event EventHandler DeviceConnected = delegate { };
 		public event EventHandler DeviceDisconnected = delegate { };
 		public event EventHandler ProgressIncrement = delegate { };
@@ -24,12 +26,15 @@ namespace Motion.Core.SyncHandler
 		public event EventHandler<CharactersDisplayedEventArgs> CharacterssDisplayed = delegate {};
 		public event EventHandler<SyncDoneEventArgs> SyncDone = delegate { };
 		public event EventHandler<BTStateEventArgs> BTStateChanged = delegate { };
+		public event EventHandler<EventArgs> ValidationCodeDisplayed = delegate { };
+		public event EventHandler<StatusEventArgs> CodeValidated = delegate { };
 
 		private IAdapter Adapter;
 		private IDevice Device;
 		private ISyncDeviceHandler SyncDeviceHandler;
 		private IWebServicesWrapper WebService;
 		private UserInformation UserInformationInstance;
+		private ApplicationInfo ApplicationInfoInstance;
 
 		private List<Guid> serviceList;
 		private bool InScanningMode;
@@ -71,11 +76,6 @@ namespace Motion.Core.SyncHandler
 			this.WebService = webserviceWrapper;
 		}
 
-		//GUI to set application info retrieved from ws.
-		//AppInfo will be used during data uploading
-		public void SetAppInfo()
-		{
-		}
 
 		//GUI to set user info retrieved from ws.
 		//UserInfo will be used during data uploading
@@ -84,9 +84,10 @@ namespace Motion.Core.SyncHandler
 			UserInformationInstance = userInfo;
 		}
 
-		public void SendAppInfo()
-		{ 
-			// need to implement to send application info to server
+		public void SendAppInfo(ApplicationInfo appInfo)
+		{
+			ApplicationInfoInstance = appInfo;
+
 		}
 
 		public static SyncHandler GetInstance()
@@ -125,7 +126,7 @@ namespace Motion.Core.SyncHandler
 				await Task.Delay(500);
 				this.InScanningMode = true;
 				this.Adapter.StartScanningForDevices(this.serviceList);
-				this.ScanStarted(this, new EventArgs());
+
 			}
 			else {
 				Debug.WriteLine("SyncHandler is null");
@@ -151,6 +152,8 @@ namespace Motion.Core.SyncHandler
 
 			this.SyncDeviceHandler.IncrementProgressBar -= UpdateProgressBar;
 			this.SyncDeviceHandler.SyncDone -= DoneSyncing;
+			this.SyncDeviceHandler.ValidationCodeDisplayed += SyncDeviceHandler_ValidationCodeDisplayed;
+			this.SyncDeviceHandler.CodeValidated += SyncDeviceHandler_CodeValidated;
 		}
 
 		public void StartWriteSettings()
@@ -220,11 +223,18 @@ namespace Motion.Core.SyncHandler
 
 			this.SyncDeviceHandler.IncrementProgressBar += UpdateProgressBar;
 			this.SyncDeviceHandler.SyncDone += DoneSyncing;
+			this.SyncDeviceHandler.SyncStarted += SyncDeviceHandler_SyncStarted;
+			this.SyncDeviceHandler.ValidationCodeDisplayed += SyncDeviceHandler_ValidationCodeDisplayed;
+			this.SyncDeviceHandler.CodeValidated += SyncDeviceHandler_CodeValidated;
+
 
 
 			this.SyncDeviceHandler.SetAdapter(this.Adapter);
 			this.SyncDeviceHandler.SetDevice(this.Device);
 			this.SyncDeviceHandler.SetWebService(this.WebService);
+			this.SyncDeviceHandler.SetUserInformation(UserInformationInstance);
+			this.SyncDeviceHandler.SetApplicationInformation(ApplicationInfoInstance);
+
 
 			e.Device.ServicesDiscovered += Services_Discovered;
 			//this.Adapter.CommandResponse += SyncDeviceHandler.ReceiveResponse;
@@ -240,6 +250,7 @@ namespace Motion.Core.SyncHandler
 			this.ProcessingDevice = false;
 			this.Device = null;
 			e.Device.ServicesDiscovered -= Services_Discovered;
+			this.SyncDeviceHandler.SyncStarted -= SyncDeviceHandler_SyncStarted;
 
 			if (this.SyncDeviceHandler != null)
 			{
@@ -313,6 +324,21 @@ namespace Motion.Core.SyncHandler
 			}
 		}
 
+		void SyncDeviceHandler_SyncStarted(object sender, EventArgs e)
+		{
+			this.SyncStarted(this, e);
+		}
+
+		void SyncDeviceHandler_ValidationCodeDisplayed(object sender, EventArgs e)
+		{
+			this.ValidationCodeDisplayed(this, e);
+		}
+
+		void SyncDeviceHandler_CodeValidated(object sender, Core.SyncHandler.StatusEventArgs e)
+		{
+			this.CodeValidated(this, e);
+		}
+
 		//**********EVENTS RECEIVED FROM BLE - End
 
 		private void startSyncProcess()
@@ -344,11 +370,11 @@ namespace Motion.Core.SyncHandler
 			return svc;
 		}
 
-		public bool ValidateActivationCode(String enteredCode)
+		public void ValidateActivationCode(String enteredCode)
 		{
 			try
 			{
-				return this.SyncDeviceHandler.ValidateActivationCode(enteredCode);
+				this.SyncDeviceHandler.ValidateActivationCode(enteredCode);
 			}
 			catch (Exception exception)
 			{
@@ -356,6 +382,7 @@ namespace Motion.Core.SyncHandler
 				throw new Exception("Error in validating activation code.");
 			}
 		}
+
 
 	}
 }

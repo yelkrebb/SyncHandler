@@ -47,6 +47,7 @@
     <Compile Include="Handler\Events\StatusEventArgs.cs" />
     <Compile Include="Handler\Events\LoginEventArgs.cs" />
     <Compile Include="Handler\Device\UploadStepsDataInstance.cs" />
+    <Compile Include="Handler\Events\AppEventArgs.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Plugin.Connectivity">
